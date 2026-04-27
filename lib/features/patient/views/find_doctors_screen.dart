@@ -8,7 +8,7 @@ import 'package:diab_care/features/patient/viewmodels/patient_viewmodel.dart';
 import 'package:diab_care/features/chat/viewmodels/chat_viewmodel.dart';
 import 'package:diab_care/features/chat/views/chat_screen.dart';
 import 'package:diab_care/features/patient/views/my_doctors_screen.dart';
-import 'package:diab_care/features/patient/views/find_pharmacies_screen.dart';
+import 'package:diab_care/features/patient/views/patient_appointments_screen.dart';
 
 class FindDoctorsScreen extends StatefulWidget {
   const FindDoctorsScreen({super.key});
@@ -180,26 +180,30 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  _QuickBtn(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Messages',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ConversationListScreen(
-                          isDoctor: false,
+                  Consumer<ChatViewModel>(
+                    builder: (context, chatVM, _) => _QuickBtn(
+                      icon: Icons.chat_bubble_outline,
+                      label: 'Messages',
+                      badge: chatVM.doctorUnreadCount,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ConversationListScreen(
+                            isDoctor: false,
+                            doctorOnly: true,
+                          ),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   _QuickBtn(
-                    icon: Icons.local_pharmacy,
-                    label: 'Pharmacies',
+                    icon: Icons.event_available,
+                    label: 'Rendez-vous',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const FindPharmaciesScreen(),
+                        builder: (_) => const PatientAppointmentsScreen(),
                       ),
                     ),
                   ),
@@ -242,11 +246,13 @@ class _QuickBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final int badge;
 
   const _QuickBtn({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.badge = 0,
   });
 
   @override
@@ -264,7 +270,39 @@ class _QuickBtn extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: AppColors.softGreen, size: 22),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, color: AppColors.softGreen, size: 22),
+                  if (badge > 0)
+                    Positioned(
+                      right: -8,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B6B),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.2),
+                        ),
+                        child: Text(
+                          badge > 99 ? '99+' : badge.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 label,

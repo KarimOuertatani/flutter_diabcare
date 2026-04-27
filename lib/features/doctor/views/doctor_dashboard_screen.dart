@@ -7,10 +7,10 @@ import 'package:diab_care/data/services/appointment_service.dart';
 import 'package:diab_care/data/services/notification_service.dart';
 import 'package:diab_care/data/services/patient_request_service.dart';
 import 'package:diab_care/features/ai/views/ai_doctor_screen.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'patient_requests_screen.dart';
-import 'notifications_screen.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -26,7 +26,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   final _notificationService = NotificationService();
 
   String _doctorName = '';
-  String _doctorSpecialite = '';
   int _totalAppointments = 0;
   int _pendingCount = 0;
   int _confirmedCount = 0;
@@ -61,7 +60,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         final data = jsonDecode(response.body);
         setState(() {
           _doctorName = '${data['prenom'] ?? ''} ${data['nom'] ?? ''}'.trim();
-          _doctorSpecialite = data['specialite'] ?? '';
         });
       }
 
@@ -218,7 +216,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) =>
-                                              const NotificationsScreen(),
+                                              const NotificationsInboxScreen(),
                                         ),
                                       );
                                       _loadDoctorData();
@@ -449,7 +447,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const NotificationsScreen(),
+                                  builder: (_) => const NotificationsInboxScreen(),
                                 ),
                               );
                               _loadDoctorData();
@@ -817,7 +815,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const NotificationsScreen(),
+                                builder: (_) => const NotificationsInboxScreen(),
                               ),
                             );
                           },

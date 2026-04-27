@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/services/token_service.dart';
 import 'package:diab_care/features/auth/services/auth_service.dart';
 import 'package:diab_care/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:diab_care/features/pharmacy/views/pharmacy_location_picker_screen.dart';
 
 class RegisterPatientScreen extends StatefulWidget {
   const RegisterPatientScreen({super.key});
@@ -20,13 +26,17 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
   final _emailController = TextEditingController();
   final _telephoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _locationController = TextEditingController();
 
   DateTime? _dateNaissance;
   String? _selectedTypeDiabete;
   String? _selectedGroupeSanguin;
+  double? _latitude;
+  double? _longitude;
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isLocating = false;
   final _authService = AuthService();
 
   // ── Options ───────────────────────────────────────────────────
@@ -49,6 +59,7 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
     _emailController.dispose();
     _telephoneController.dispose();
     _passwordController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -100,6 +111,13 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
       'dateNaissance': _dateNaissance!.toIso8601String(),
       'typeDiabete': _selectedTypeDiabete,
       'groupeSanguin': _selectedGroupeSanguin,
+      if (_latitude != null) 'latitude': _latitude,
+      if (_longitude != null) 'longitude': _longitude,
+      if (_latitude != null && _longitude != null)
+        'location': {
+          'type': 'Point',
+          'coordinates': [_longitude, _latitude],
+        },
     };
 
     debugPrint('📤 REGISTER BODY: $body');
@@ -133,6 +151,78 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+
+  Future<void> _choosePatientLocation() async {
+    if (_isLocating) return;
+
+    final initial = (_latitude != null && _longitude != null)
+        ? LatLng(_latitude!, _longitude!)
+        : const LatLng(36.8065, 10.1815);
+
+    final picked = await Navigator.push<PharmacyLocationPickerResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PharmacyLocationPickerScreen(
+          initialLocation: initial,
+          title: 'Choisir votre position',
+          showAutoButton: false,
+          confirmButtonLabel: 'Valider ma position',
+          markerTitle: 'Votre position',
+          positionLabel: 'Lat',
+        ),
+      ),
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _latitude = picked.latitude;
+      _longitude = picked.longitude;
+    });
+
+    await _fillAddressFromCoordinates(
+      latitude: picked.latitude,
+      longitude: picked.longitude,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Position patient enregistrée.'),
+        backgroundColor: AppColors.softGreen,
+      ),
+    );
+  }
+
+  Future<void> _fillAddressFromCoordinates({
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(latitude, longitude)
+          .timeout(const Duration(seconds: 8));
+      if (placemarks.isEmpty) return;
+
+      final place = placemarks.first;
+      final parts = [
+        place.street,
+        place.subLocality,
+        place.locality,
+        place.administrativeArea,
+        place.postalCode,
+        place.country,
+      ].where((p) => p != null && p!.trim().isNotEmpty).map((p) => p!.trim());
+
+      final address = parts.join(', ');
+      if (address.isEmpty || !mounted) return;
+
+      setState(() {
+        _locationController.text = address;
+      });
+    } catch (_) {
+      // Manual selection still works without reverse geocoding.
+    }
   }
 
   @override
@@ -291,6 +381,77 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
                           ),
                           const SizedBox(height: 32),
 
+                          _buildTextField(
+                            controller: _locationController,
+                            label: 'Localisation',
+                            icon: Icons.location_on,
+                            readOnly: true,
+                          ),
+                          const SizedBox(height: 12),
+
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.softGreen.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.softGreen.withOpacity(0.18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Votre position de proximité',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Choisissez votre position manuellement sur la carte.',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isLocating ? null : _choosePatientLocation,
+                                    icon: const Icon(Icons.map_rounded),
+                                    label: const Text('Choisir sur la carte'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.softGreen,
+                                      side: const BorderSide(
+                                        color: AppColors.softGreen,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _latitude != null && _longitude != null
+                                      ? 'Position enregistrée (${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)})'
+                                      : 'Position non définie pour le moment.',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
                           // ── Register Button ────────────────────
                           SizedBox(
                             width: double.infinity,
@@ -325,6 +486,7 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
     required String label,
     required IconData icon,
     TextInputType? keyboardType,
+    bool readOnly = false,
     bool obscureText = false,
     Widget? suffixIcon,
     String? Function(String?)? validator,
@@ -332,6 +494,7 @@ class _RegisterPatientScreenState extends State<RegisterPatientScreen> {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       obscureText: obscureText,
       validator: validator,
       decoration: InputDecoration(

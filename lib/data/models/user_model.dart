@@ -259,6 +259,8 @@ class PharmacyUserModel extends UserModel {
   final bool isOpen;
   final double rating;
   final int totalReviews;
+  final double? latitude;
+  final double? longitude;
 
   PharmacyUserModel({
     required super.id,
@@ -270,6 +272,8 @@ class PharmacyUserModel extends UserModel {
     this.isOpen = true,
     this.rating = 0.0,
     this.totalReviews = 0,
+    this.latitude,
+    this.longitude,
     super.avatarUrl,
   }) : super(role: 'pharmacy');
 }

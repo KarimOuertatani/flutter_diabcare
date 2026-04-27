@@ -48,10 +48,16 @@ class RatingService {
       try {
         final data = jsonDecode(response.body);
         if (data is Map && data['message'] != null) {
-          throw Exception(data['message'].toString());
+          final raw = data['message'];
+          if (raw is List) {
+            throw Exception(raw.join(', '));
+          }
+          throw Exception(raw.toString());
         }
-      } catch (_) {
-        // Fall through to generic error
+      } catch (e) {
+        if (e is Exception) {
+          rethrow;
+        }
       }
     }
 

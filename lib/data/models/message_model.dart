@@ -30,18 +30,18 @@ class MessageModel {
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
           : json['createdAt'] != null
-              ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
-              : DateTime.now(),
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
       isRead: json['isRead'] == true,
       senderName: json['senderName']?.toString() ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'senderId': senderId,
-        'receiverId': receiverId,
-        'content': content,
-      };
+    'senderId': senderId,
+    'receiverId': receiverId,
+    'content': content,
+  };
 }
 
 class ConversationModel {
@@ -72,7 +72,10 @@ class ConversationModel {
   });
 
   /// Parse from backend JSON — works for patient, doctor, and pharmacist conversations.
-  factory ConversationModel.fromJson(Map<String, dynamic> json, {bool isDoctor = false}) {
+  factory ConversationModel.fromJson(
+    Map<String, dynamic> json, {
+    bool isDoctor = false,
+  }) {
     // Extract doctor info
     String doctorId = '';
     String doctorName = '';
@@ -81,9 +84,13 @@ class ConversationModel {
       doctorId = doctorField['_id']?.toString() ?? '';
       final nom = doctorField['nom']?.toString() ?? '';
       final prenom = doctorField['prenom']?.toString() ?? '';
-      doctorName = 'Dr. $prenom $nom'.trim();
+      final full = '$prenom $nom'.trim();
+      doctorName = full.isNotEmpty ? 'Dr. $full' : '';
     } else {
       doctorId = doctorField?.toString() ?? '';
+    }
+    if (doctorName.isEmpty) {
+      doctorName = json['doctorName']?.toString() ?? '';
     }
 
     // Extract pharmacist info
@@ -95,9 +102,14 @@ class ConversationModel {
       final nom = pharmacistField['nom']?.toString() ?? '';
       final prenom = pharmacistField['prenom']?.toString() ?? '';
       final nomPharmacie = pharmacistField['nomPharmacie']?.toString() ?? '';
-      pharmacistName = nomPharmacie.isNotEmpty ? nomPharmacie : '$prenom $nom'.trim();
+      pharmacistName = nomPharmacie.isNotEmpty
+          ? nomPharmacie
+          : '$prenom $nom'.trim();
     } else {
       pharmacistId = pharmacistField?.toString() ?? '';
+    }
+    if (pharmacistName.isEmpty) {
+      pharmacistName = json['pharmacistName']?.toString() ?? '';
     }
 
     // Extract patient info
@@ -112,8 +124,22 @@ class ConversationModel {
     } else {
       patientId = patientField?.toString() ?? '';
     }
+    final patientObject = json['patient'];
+    if (patientName.isEmpty && patientObject is Map) {
+      final nom = patientObject['nom']?.toString() ?? '';
+      final prenom = patientObject['prenom']?.toString() ?? '';
+      patientName = '$prenom $nom'.trim();
+    }
+    if (patientName.isEmpty) {
+      patientName =
+          json['patientName']?.toString() ??
+          json['patientFullName']?.toString() ??
+          '';
+    }
 
-    final type = json['type']?.toString() ?? (pharmacistId.isNotEmpty && doctorId.isEmpty ? 'pharmacist' : 'doctor');
+    final type =
+        json['type']?.toString() ??
+        (pharmacistId.isNotEmpty && doctorId.isEmpty ? 'pharmacist' : 'doctor');
 
     return ConversationModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
@@ -125,10 +151,11 @@ class ConversationModel {
       patientName: patientName,
       lastMessage: json['lastMessage']?.toString() ?? '',
       lastMessageTime: json['lastMessageTime'] != null
-          ? DateTime.tryParse(json['lastMessageTime'].toString()) ?? DateTime.now()
+          ? DateTime.tryParse(json['lastMessageTime'].toString()) ??
+                DateTime.now()
           : json['updatedAt'] != null
-              ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now()
-              : DateTime.now(),
+          ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
       type: type,
     );

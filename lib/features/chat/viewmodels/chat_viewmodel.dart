@@ -31,6 +31,14 @@ class ChatViewModel extends ChangeNotifier {
   int get totalUnread =>
       _conversations.fold(0, (sum, c) => sum + c.unreadCount);
 
+  int get doctorUnreadCount => _conversations
+      .where((c) => c.type != 'pharmacist')
+      .fold(0, (sum, c) => sum + c.unreadCount);
+
+  int get pharmacyUnreadCount => _conversations
+      .where((c) => c.type == 'pharmacist')
+      .fold(0, (sum, c) => sum + c.unreadCount);
+
   String? get currentUserId => _tokenService.userId;
   String? get currentUserRole => _tokenService.userRole;
   String? get currentUserName {
@@ -67,7 +75,7 @@ class ChatViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final isDoctor = role!.toLowerCase() == 'medecin';
+      final isDoctor = role.toLowerCase() == 'medecin';
       final isPharmacist = role.toLowerCase() == 'pharmacien';
       if (isDoctor) {
         debugPrint('💬 Loading DOCTOR conversations for $userId');
@@ -106,7 +114,9 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   /// Create or get a conversation with a pharmacist (called from patient side).
-  Future<ConversationModel?> startPharmacistConversation(String pharmacistId) async {
+  Future<ConversationModel?> startPharmacistConversation(
+    String pharmacistId,
+  ) async {
     final userId = _tokenService.userId;
     if (userId == null) return null;
 
@@ -202,7 +212,9 @@ class ChatViewModel extends ChangeNotifier {
             pharmacistName: c.pharmacistName,
             patientId: c.patientId,
             patientName: c.patientName,
-            lastMessage: content.length > 100 ? content.substring(0, 100) : content,
+            lastMessage: content.length > 100
+                ? content.substring(0, 100)
+                : content,
             lastMessageTime: DateTime.now(),
             unreadCount: 0,
             type: c.type,

@@ -61,7 +61,7 @@ class AuthService {
       return AuthResponse(
         success: false,
         errorMessage:
-            'Serveur inaccessible. Vérifiez que le backend tourne sur le port 3000.',
+            'Serveur inaccessible. Vérifiez votre connexion et la disponibilité du backend.',
       );
     } on TimeoutException {
       return AuthResponse(
@@ -104,7 +104,7 @@ class AuthService {
       return AuthResponse(
         success: false,
         errorMessage:
-            'Serveur inaccessible. Vérifiez que le backend tourne sur le port 3000.',
+            'Serveur inaccessible. Vérifiez votre connexion et la disponibilité du backend.',
       );
     } on TimeoutException {
       return AuthResponse(

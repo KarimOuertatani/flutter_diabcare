@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/widgets/diab_care_bottom_nav.dart';
-import 'package:diab_care/core/services/token_service.dart';
-import 'package:diab_care/data/services/patient_request_service.dart';
 import 'package:diab_care/features/chat/viewmodels/chat_viewmodel.dart';
 import 'package:diab_care/features/chat/views/chat_screen.dart';
+import 'package:diab_care/core/services/walkthrough_service.dart';
+import 'package:diab_care/core/widgets/role_walkthrough_dialog.dart';
 import 'doctor_dashboard_screen.dart';
 import 'patients_list_screen.dart';
 import 'appointments_screen.dart';
 import 'doctor_profile_screen.dart';
-import 'patient_requests_screen.dart';
 
 class DoctorHomeScreen extends StatefulWidget {
   const DoctorHomeScreen({super.key});
@@ -21,33 +20,41 @@ class DoctorHomeScreen extends StatefulWidget {
 
 class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   int _currentIndex = 0;
-  int _pendingRequestsCount = 0;
-  final _tokenService = TokenService();
-  final _patientRequestService = PatientRequestService();
+  final _walkthroughService = WalkthroughService.instance;
 
   @override
   void initState() {
     super.initState();
-    _loadPendingRequestsCount();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<ChatViewModel>().loadConversations();
-      }
+      _initializeHome();
     });
   }
 
-  Future<void> _loadPendingRequestsCount() async {
-    try {
-      final doctorId = await _tokenService.getUserId();
-      if (doctorId != null) {
-        final requests = await _patientRequestService.getPatientRequests(
-          doctorId,
-        );
-        setState(() {
-          _pendingRequestsCount = requests.where((r) => r.isPending).length;
-        });
-      }
-    } catch (_) {}
+  Future<void> _initializeHome() async {
+    if (!mounted) return;
+    context.read<ChatViewModel>().loadConversations();
+    await _showWalkthroughIfNeeded();
+  }
+
+  Future<void> _showWalkthroughIfNeeded() async {
+    if (!mounted) return;
+
+    final shouldShow = await _walkthroughService.shouldShow(AppUserRole.doctor);
+    if (!shouldShow || !mounted) return;
+
+    final steps = _walkthroughService.stepsForRole(AppUserRole.doctor);
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RoleWalkthroughDialog(
+        roleTitle: _walkthroughService.roleTitle(AppUserRole.doctor),
+        steps: steps,
+        onCompleted: () {
+          _walkthroughService.markSeen(AppUserRole.doctor);
+        },
+      ),
+    );
   }
 
   final List<Widget> _screens = const [

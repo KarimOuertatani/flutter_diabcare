@@ -16,6 +16,8 @@ import 'package:diab_care/features/patient/views/find_pharmacies_screen.dart';
 import 'package:diab_care/features/patient/views/patient_profile_screen.dart';
 import 'package:diab_care/features/patient/views/nutrition/nutrition_main_screen.dart';
 import 'package:diab_care/features/ai/views/ai_hub_screen.dart';
+import 'package:diab_care/core/services/walkthrough_service.dart';
+import 'package:diab_care/core/widgets/role_walkthrough_dialog.dart';
 
 class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
@@ -28,6 +30,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   int _currentIndex = 0;
   final _tokenService = TokenService();
   final _patientRequestService = PatientRequestService();
+  final _walkthroughService = WalkthroughService.instance;
   bool _checkingAccessRequests = false;
 
   final List<Widget> _screens = const [
@@ -43,12 +46,41 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GlucoseViewModel>().loadReadings();
-      context.read<PatientViewModel>().loadPatientData();
-      context.read<MealViewModel>().loadMeals();
-      context.read<ChatViewModel>().loadConversations();
-      _checkPendingDoctorAccessRequests();
+      _initializeHome();
     });
+  }
+
+  Future<void> _initializeHome() async {
+    context.read<GlucoseViewModel>().loadReadings();
+    context.read<PatientViewModel>().loadPatientData();
+    context.read<MealViewModel>().loadMeals();
+    context.read<ChatViewModel>().loadConversations();
+
+    await _showWalkthroughIfNeeded();
+    _checkPendingDoctorAccessRequests();
+  }
+
+  Future<void> _showWalkthroughIfNeeded() async {
+    if (!mounted) return;
+
+    final shouldShow = await _walkthroughService.shouldShow(
+      AppUserRole.patient,
+    );
+    if (!shouldShow || !mounted) return;
+
+    final steps = _walkthroughService.stepsForRole(AppUserRole.patient);
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RoleWalkthroughDialog(
+        roleTitle: _walkthroughService.roleTitle(AppUserRole.patient),
+        steps: steps,
+        onCompleted: () {
+          _walkthroughService.markSeen(AppUserRole.patient);
+        },
+      ),
+    );
   }
 
   Future<void> _checkPendingDoctorAccessRequests() async {
@@ -59,12 +91,14 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       final patientId = _tokenService.userId ?? await _tokenService.getUserId();
       if (patientId == null || !mounted) return;
 
-      final requests = await _patientRequestService.getPendingDoctorAccessRequests(patientId);
+      final requests = await _patientRequestService
+          .getPendingDoctorAccessRequests(patientId);
       if (requests.isEmpty || !mounted) return;
 
       final request = requests.first;
       final doctor = (request['doctorId'] as Map<String, dynamic>?) ?? {};
-      final doctorName = 'Dr. ${doctor['prenom'] ?? ''} ${doctor['nom'] ?? ''}'.trim();
+      final doctorName = 'Dr. ${doctor['prenom'] ?? ''} ${doctor['nom'] ?? ''}'
+          .trim();
 
       final accepted = await showDialog<bool>(
         context: context,
@@ -74,7 +108,9 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
           content: Text(
             '$doctorName souhaite accéder à vos informations médicales.\n\nAutoriser cet accès ?',
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -82,7 +118,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.softGreen, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.softGreen,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Autoriser'),
             ),
           ],
@@ -106,12 +145,17 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                 ? 'Accès accordé au médecin. Il peut désormais consulter vos informations.'
                 : 'Demande refusée.',
           ),
-          backgroundColor: accepted ? AppColors.softGreen : const Color(0xFFFF6B6B),
+          backgroundColor: accepted
+              ? AppColors.softGreen
+              : const Color(0xFFFF6B6B),
           behavior: SnackBarBehavior.floating,
         ),
       );
 
-      Future.delayed(const Duration(milliseconds: 400), _checkPendingDoctorAccessRequests);
+      Future.delayed(
+        const Duration(milliseconds: 400),
+        _checkPendingDoctorAccessRequests,
+      );
     } catch (_) {
       // Ignore popup failures silently to avoid blocking home screen
     } finally {
@@ -125,41 +169,44 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       backgroundColor: AppColors.backgroundPrimary,
       body: _screens[_currentIndex],
       extendBody: false,
-      bottomNavigationBar: DiabCareBottomNav(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          DiabCareNavItem(
-            icon: Icons.dashboard_outlined,
-            activeIcon: Icons.dashboard_rounded,
-            label: 'Accueil',
-          ),
-          DiabCareNavItem(
-            icon: Icons.restaurant_outlined,
-            activeIcon: Icons.restaurant_rounded,
-            label: 'Nutrition',
-          ),
-          DiabCareNavItem(
-            icon: Icons.auto_awesome_outlined,
-            activeIcon: Icons.auto_awesome_rounded,
-            label: 'IA',
-          ),
-          DiabCareNavItem(
-            icon: Icons.medical_services_outlined,
-            activeIcon: Icons.medical_services_rounded,
-            label: 'Médecins',
-          ),
-          DiabCareNavItem(
-            icon: Icons.local_pharmacy_outlined,
-            activeIcon: Icons.local_pharmacy_rounded,
-            label: 'Pharmacies',
-          ),
-          DiabCareNavItem(
-            icon: Icons.person_outline_rounded,
-            activeIcon: Icons.person_rounded,
-            label: 'Profil',
-          ),
-        ],
+      bottomNavigationBar: Consumer<ChatViewModel>(
+        builder: (context, chatVM, _) => DiabCareBottomNav(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          items: [
+            const DiabCareNavItem(
+              icon: Icons.dashboard_outlined,
+              activeIcon: Icons.dashboard_rounded,
+              label: 'Accueil',
+            ),
+            const DiabCareNavItem(
+              icon: Icons.restaurant_outlined,
+              activeIcon: Icons.restaurant_rounded,
+              label: 'Nutrition',
+            ),
+            const DiabCareNavItem(
+              icon: Icons.auto_awesome_outlined,
+              activeIcon: Icons.auto_awesome_rounded,
+              label: 'IA',
+            ),
+            DiabCareNavItem(
+              icon: Icons.medical_services_outlined,
+              activeIcon: Icons.medical_services_rounded,
+              label: 'Médecins',
+              badge: chatVM.doctorUnreadCount,
+            ),
+            const DiabCareNavItem(
+              icon: Icons.local_pharmacy_outlined,
+              activeIcon: Icons.local_pharmacy_rounded,
+              label: 'Pharmacies',
+            ),
+            const DiabCareNavItem(
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profil',
+            ),
+          ],
+        ),
       ),
     );
   }

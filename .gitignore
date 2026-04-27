@@ -19,33 +19,35 @@ migrate_working_dir/
 .idea/
 
 # VS Code (optionnel)
-#.vscode/
+.vscode/
 
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
-/build/
+build/
 
-# IMPORTANT 🔥 (corrige ton problème)
+# Android (TRÈS IMPORTANT)
 android/app/build/
 android/build/
+android/.gradle/
+android/local.properties
 
 # iOS
+ios/Pods/
+ios/.symlinks/
 ios/Flutter/.last_build_id
 
 # Generated files
-**/doc/api/
+*.lock
+*.tmp
+*.apk
+*.aab
+*.ipa
 
 # Symbolication
 app.*.symbols
-
-# Obfuscation
 app.*.map.json
-
-# Android build outputs
-/android/app/debug
-/android/app/profile
-/android/app/release

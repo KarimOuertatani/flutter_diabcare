@@ -55,6 +55,8 @@ class AppointmentModel {
   final String id;
   final String patientId;
   final String? patientName;
+  final String? patientEmail;
+  final String? patientPhone;
   final String doctorId;
   final String? doctorName;
   final String? doctorSpecialty;
@@ -62,6 +64,9 @@ class AppointmentModel {
   final AppointmentType type;
   final AppointmentStatus status;
   final String? notes;
+  final String? createdByRole;
+  final DateTime? expiresAt;
+  final DateTime? patientConfirmedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -69,6 +74,8 @@ class AppointmentModel {
     required this.id,
     required this.patientId,
     this.patientName,
+    this.patientEmail,
+    this.patientPhone,
     required this.doctorId,
     this.doctorName,
     this.doctorSpecialty,
@@ -76,6 +83,9 @@ class AppointmentModel {
     required this.type,
     required this.status,
     this.notes,
+    this.createdByRole,
+    this.expiresAt,
+    this.patientConfirmedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -89,6 +99,10 @@ class AppointmentModel {
           : (json['patientId']['_id'] as String? ?? ''),
       patientName: json['patientName'] as String? ??
           (json['patientId'] is Map ? '${json['patientId']['nom'] ?? ''} ${json['patientId']['prenom'] ?? ''}'.trim() : null),
+        patientEmail: json['patientEmail'] as String? ??
+          (json['patientId'] is Map ? json['patientId']['email'] as String? : null),
+        patientPhone: json['patientPhone'] as String? ??
+          (json['patientId'] is Map ? json['patientId']['telephone'] as String? : null),
       doctorId: json['doctorId'] is String
           ? json['doctorId'] as String
           : (json['doctorId']['_id'] as String? ?? ''),
@@ -100,6 +114,13 @@ class AppointmentModel {
       type: AppointmentType.fromString(json['type'] as String),
       status: AppointmentStatus.fromString(json['status'] as String),
       notes: json['notes'] as String?,
+      createdByRole: json['createdByRole']?.toString(),
+      expiresAt: json['expiresAt'] != null
+          ? DateTime.tryParse(json['expiresAt'].toString())
+          : null,
+      patientConfirmedAt: json['patientConfirmedAt'] != null
+          ? DateTime.tryParse(json['patientConfirmedAt'].toString())
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -158,6 +179,8 @@ class AppointmentModel {
     String? id,
     String? patientId,
     String? patientName,
+    String? patientEmail,
+    String? patientPhone,
     String? doctorId,
     String? doctorName,
     String? doctorSpecialty,
@@ -165,6 +188,9 @@ class AppointmentModel {
     AppointmentType? type,
     AppointmentStatus? status,
     String? notes,
+    String? createdByRole,
+    DateTime? expiresAt,
+    DateTime? patientConfirmedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -172,6 +198,8 @@ class AppointmentModel {
       id: id ?? this.id,
       patientId: patientId ?? this.patientId,
       patientName: patientName ?? this.patientName,
+      patientEmail: patientEmail ?? this.patientEmail,
+      patientPhone: patientPhone ?? this.patientPhone,
       doctorId: doctorId ?? this.doctorId,
       doctorName: doctorName ?? this.doctorName,
       doctorSpecialty: doctorSpecialty ?? this.doctorSpecialty,
@@ -179,6 +207,9 @@ class AppointmentModel {
       type: type ?? this.type,
       status: status ?? this.status,
       notes: notes ?? this.notes,
+      createdByRole: createdByRole ?? this.createdByRole,
+      expiresAt: expiresAt ?? this.expiresAt,
+      patientConfirmedAt: patientConfirmedAt ?? this.patientConfirmedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

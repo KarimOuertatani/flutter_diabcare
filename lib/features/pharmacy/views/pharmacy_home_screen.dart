@@ -5,9 +5,9 @@ import 'package:diab_care/core/widgets/diab_care_bottom_nav.dart';
 import 'package:diab_care/core/theme/app_text_styles.dart';
 import 'pharmacy_dashboard_screen.dart';
 import 'pharmacy_requests_screen.dart';
-import 'pharmacy_products_screen.dart';
-import 'pharmacy_orders_screen.dart';
 import 'package:diab_care/features/chat/views/chat_screen.dart';
+import 'package:diab_care/core/services/walkthrough_service.dart';
+import 'package:diab_care/core/widgets/role_walkthrough_dialog.dart';
 import 'pharmacy_profile_screen.dart';
 
 class PharmacyHomeScreen extends StatefulWidget {
@@ -19,13 +19,43 @@ class PharmacyHomeScreen extends StatefulWidget {
 
 class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
   int _currentIndex = 0;
+  final _walkthroughService = WalkthroughService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showWalkthroughIfNeeded();
+    });
+  }
+
+  Future<void> _showWalkthroughIfNeeded() async {
+    if (!mounted) return;
+
+    final shouldShow = await _walkthroughService.shouldShow(
+      AppUserRole.pharmacy,
+    );
+    if (!shouldShow || !mounted) return;
+
+    final steps = _walkthroughService.stepsForRole(AppUserRole.pharmacy);
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RoleWalkthroughDialog(
+        roleTitle: _walkthroughService.roleTitle(AppUserRole.pharmacy),
+        steps: steps,
+        onCompleted: () {
+          _walkthroughService.markSeen(AppUserRole.pharmacy);
+        },
+      ),
+    );
+  }
 
   final List<Widget> _screens = const [
     PharmacyDashboardScreen(),
     PharmacyRequestsScreen(),
-    PharmacyProductsScreen(),
-    PharmacyOrdersScreen(),
-    ConversationListScreen(isDoctor: false),
+    ConversationListScreen(isDoctor: false, isPharmacist: true),
     PharmacyProfileScreen(),
   ];
 
@@ -48,16 +78,6 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
             icon: Icons.list_alt_outlined,
             activeIcon: Icons.list_alt_rounded,
             label: 'Demandes',
-          ),
-          DiabCareNavItem(
-            icon: Icons.inventory_2_outlined,
-            activeIcon: Icons.inventory_2_rounded,
-            label: 'Produits',
-          ),
-          DiabCareNavItem(
-            icon: Icons.receipt_long_outlined,
-            activeIcon: Icons.receipt_long_rounded,
-            label: 'Commandes',
           ),
           DiabCareNavItem(
             icon: Icons.chat_bubble_outline,

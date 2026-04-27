@@ -189,6 +189,28 @@ class PatientViewModel extends ChangeNotifier {
               ? nomPharmacie
               : '$prenom $nom'.trim();
 
+          double? latitude;
+          double? longitude;
+          final location = map['location'];
+          if (location is Map<String, dynamic>) {
+            final coordinates = location['coordinates'];
+            if (coordinates is List && coordinates.length >= 2) {
+              final lng = coordinates[0];
+              final lat = coordinates[1];
+              if (lat is num && lng is num) {
+                latitude = lat.toDouble();
+                longitude = lng.toDouble();
+              }
+            }
+          }
+
+          latitude ??= (map['latitude'] is num)
+              ? (map['latitude'] as num).toDouble()
+              : null;
+          longitude ??= (map['longitude'] is num)
+              ? (map['longitude'] as num).toDouble()
+              : null;
+
           final averageRating = map['averageRating'];
           final noteMoyenne = map['noteMoyenne'];
           final ratingValue = ((averageRating ?? noteMoyenne ?? 0) as num)
@@ -210,6 +232,8 @@ class PatientViewModel extends ChangeNotifier {
             isOpen: map['statutCompte']?.toString().toLowerCase() == 'actif',
             rating: ratingValue,
             totalReviews: ((map['totalReviews'] ?? 0) as num).toInt(),
+            latitude: latitude,
+            longitude: longitude,
           );
         }).toList();
         notifyListeners();

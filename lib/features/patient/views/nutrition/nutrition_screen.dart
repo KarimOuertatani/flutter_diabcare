@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
-import 'package:diab_care/features/patient/views/meals_screen.dart';
+import 'package:diab_care/features/patient/views/nutrition/meals_screen.dart';
 
 /// Nutrition page for patients: upload/take food photo, view AI analysis (mock).
 /// Mobile-first, DiabCare design system.
@@ -18,7 +18,6 @@ class NutritionScreen extends StatefulWidget {
 class _NutritionScreenState extends State<NutritionScreen>
     with TickerProviderStateMixin {
   _NutritionState _state = _NutritionState.empty;
-  XFile? _pickedFile;
   File? _imageFile;
   String? _errorMessage;
 
@@ -44,7 +43,6 @@ class _NutritionScreenState extends State<NutritionScreen>
       );
       if (file == null || !mounted) return;
       setState(() {
-        _pickedFile = file;
         _imageFile = File(file.path);
         _errorMessage = null;
         _state = _NutritionState.loading;
@@ -54,7 +52,8 @@ class _NutritionScreenState extends State<NutritionScreen>
       if (mounted) {
         setState(() {
           _state = _NutritionState.error;
-          _errorMessage = 'Impossible d\'accéder à l\'image. Vérifiez les autorisations.';
+          _errorMessage =
+              'Impossible d\'accéder à l\'image. Vérifiez les autorisations.';
         });
       }
     }
@@ -79,7 +78,6 @@ class _NutritionScreenState extends State<NutritionScreen>
   void _reset() {
     setState(() {
       _state = _NutritionState.empty;
-      _pickedFile = null;
       _imageFile = null;
       _errorMessage = null;
     });
@@ -109,7 +107,10 @@ class _NutritionScreenState extends State<NutritionScreen>
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: _NavChip(
                   label: 'Meals',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealsScreen())),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MealsScreen()),
+                  ),
                 ),
               ),
             ),
@@ -119,15 +120,18 @@ class _NutritionScreenState extends State<NutritionScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_state == _NutritionState.empty || _state == _NutritionState.error) ...[
+                    if (_state == _NutritionState.empty ||
+                        _state == _NutritionState.error) ...[
                       _buildUploadCard(),
                       if (_state == _NutritionState.error) _buildErrorCard(),
                     ],
-                    if (_state == _NutritionState.loading && _imageFile != null) ...[
+                    if (_state == _NutritionState.loading &&
+                        _imageFile != null) ...[
                       _buildImagePreview(showLoading: true),
                       _buildLoadingCard(),
                     ],
-                    if (_state == _NutritionState.result && _imageFile != null) ...[
+                    if (_state == _NutritionState.result &&
+                        _imageFile != null) ...[
                       _buildImagePreview(showLoading: false),
                       _buildResultsCard(),
                     ],
@@ -208,7 +212,8 @@ class _NutritionScreenState extends State<NutritionScreen>
       tween: Tween(begin: 0.95, end: 1),
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
-      builder: (context, value, child) => Transform.scale(scale: value, child: child),
+      builder: (context, value, child) =>
+          Transform.scale(scale: value, child: child),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -369,10 +374,7 @@ class _NutritionScreenState extends State<NutritionScreen>
           const SizedBox(height: 8),
           Text(
             'Our AI is estimating nutrients and impact.',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -391,20 +393,24 @@ class _NutritionScreenState extends State<NutritionScreen>
         ),
         child: Row(
           children: [
-            Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 28),
+            Icon(
+              Icons.error_outline_rounded,
+              color: AppColors.errorRed,
+              size: 28,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 _errorMessage ?? 'An error occurred.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
               ),
             ),
             TextButton(
               onPressed: _reset,
-              child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                'Retry',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -452,7 +458,10 @@ class _NutritionScreenState extends State<NutritionScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: _riskColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
@@ -522,12 +531,18 @@ class _NutritionScreenState extends State<NutritionScreen>
               decoration: BoxDecoration(
                 color: AppColors.mintGreen.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.primaryGreen.withOpacity(0.2)),
+                border: Border.all(
+                  color: AppColors.primaryGreen.withOpacity(0.2),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.lightbulb_outline_rounded, color: AppColors.darkGreen, size: 22),
+                  Icon(
+                    Icons.lightbulb_outline_rounded,
+                    color: AppColors.darkGreen,
+                    size: 22,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -549,11 +564,16 @@ class _NutritionScreenState extends State<NutritionScreen>
               child: ElevatedButton.icon(
                 onPressed: _saveMeal,
                 icon: const Icon(Icons.save_rounded, size: 22),
-                label: const Text('Save Meal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Save Meal',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryGreen,
                   foregroundColor: AppColors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -719,9 +739,10 @@ class _AnimatedCounterState extends State<_AnimatedCounter>
       duration: const Duration(milliseconds: 800),
     );
     final end = double.tryParse(widget.value) ?? 0;
-    _animation = Tween<double>(begin: 0, end: end).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _animation = Tween<double>(
+      begin: 0,
+      end: end,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -768,7 +789,14 @@ class _NavChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkGreen)),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.darkGreen,
+            ),
+          ),
         ),
       ),
     );

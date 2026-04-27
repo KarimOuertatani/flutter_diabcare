@@ -9,6 +9,7 @@ import 'package:diab_care/features/patient/widgets/glucose_card.dart';
 import 'package:diab_care/features/patient/views/add_glucose_screen.dart';
 import 'package:diab_care/features/patient/views/statistics_screen.dart';
 import 'package:diab_care/features/patient/views/recommendations_screen.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
 
 import 'package:diab_care/features/chat/views/chat_screen.dart';
 import 'package:diab_care/features/chat/viewmodels/chat_viewmodel.dart';

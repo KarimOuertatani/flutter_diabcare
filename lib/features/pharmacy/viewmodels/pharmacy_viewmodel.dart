@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:diab_care/core/constants/api_constants.dart';
+import 'package:diab_care/core/services/push_notification_service.dart';
 import 'package:diab_care/core/services/token_service.dart';
 import 'package:diab_care/core/services/gamification_service.dart';
 import 'package:diab_care/features/pharmacy/models/pharmacy_api_models.dart';
@@ -291,7 +292,9 @@ class PharmacyViewModel extends ChangeNotifier {
     return MedicationRequest(
       id: apiRequest.id,
       patientId: apiRequest.patientId,
-      patientName: 'Patient',
+      patientName: apiRequest.patientName.isNotEmpty
+          ? apiRequest.patientName
+          : 'Patient',
       medicationName: apiRequest.medicationName,
       quantity: apiRequest.quantity,
       dosage: '${apiRequest.dosage} - ${apiRequest.format}',
@@ -441,8 +444,11 @@ class PharmacyViewModel extends ChangeNotifier {
   }
 
   /// Déconnexion
-  Future<void> logout() async {
-    await _tokenService.clearAuthData();
+  Future<void> logout({bool clearAuthData = true}) async {
+    if (clearAuthData) {
+      await PushNotificationService.instance.onBeforeLogout();
+      await _tokenService.clearAuthData();
+    }
     _isLoggedIn = false;
     _pharmacyProfile = null;
     _dashboardData = null;
@@ -852,6 +858,50 @@ class PharmacyViewModel extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint('❌ updateProfilePhoto error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updatePharmacyLocation({
+    required double latitude,
+    required double longitude,
+    String? adressePharmacie,
+  }) async {
+    try {
+      final token = await _tokenService.getToken();
+      final pharmacyId = await _tokenService.getUserId();
+
+      if (token == null || pharmacyId == null) {
+        throw Exception('Non authentifie');
+      }
+
+      final url = '${ApiConstants.baseUrl}/pharmaciens/$pharmacyId';
+      final response = await http.patch(
+        Uri.parse(url),
+        headers: ApiConstants.authHeaders(token),
+        body: jsonEncode({
+          'latitude': latitude,
+          'longitude': longitude,
+          'location': {
+            'type': 'Point',
+            'coordinates': [longitude, latitude],
+          },
+          if (adressePharmacie != null && adressePharmacie.trim().isNotEmpty)
+            'adressePharmacie': adressePharmacie,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final updated = jsonDecode(response.body) as Map<String, dynamic>;
+        _pharmacyProfile = PharmacyProfile.fromJson(updated);
+        await _tokenService.saveAuthData(token: token, userData: updated);
+        notifyListeners();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('❌ updatePharmacyLocation error: $e');
       return false;
     }
   }

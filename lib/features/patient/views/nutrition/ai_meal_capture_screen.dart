@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/services/token_service.dart';
 import 'package:diab_care/features/patient/viewmodels/meal_viewmodel.dart';
@@ -35,7 +34,6 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
   String _mealName = '';
   String? _aiAdvice;
   String? _error;
-  AiFoodAnalysisResponse? _analysisResult;
 
   @override
   void dispose() {
@@ -69,7 +67,9 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
         // Read image bytes from XFile (works reliably on all platforms)
         final imageBytes = await file.readAsBytes();
         final fileName = file.name.isNotEmpty ? file.name : 'photo.jpg';
-        debugPrint('📷 [MealCapture] Image: ${imageBytes.length} bytes, name: $fileName');
+        debugPrint(
+          '📷 [MealCapture] Image: ${imageBytes.length} bytes, name: $fileName',
+        );
 
         // Upload to Cloudinary
         final imageUrl = await CloudinaryService.uploadImageBytes(
@@ -79,14 +79,11 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
         );
         debugPrint('✅ [MealCapture] Cloudinary URL: $imageUrl');
 
-        final result = await _aiService.analyzeFood(
-          imageUrl: imageUrl,
-        );
+        final result = await _aiService.analyzeFood(imageUrl: imageUrl);
 
         if (!mounted) return;
         setState(() {
           _analyzing = false;
-          _analysisResult = result;
           _mealName = result.mealName;
           _carbsController.text = '${result.carbs.round()}';
           _proteinController.text = '${result.protein.round()}';
@@ -135,7 +132,12 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
     final protein = double.tryParse(_proteinController.text.trim());
     final fat = double.tryParse(_fatController.text.trim());
     final calories = double.tryParse(_caloriesController.text.trim());
-    if (carbs == null || protein == null || fat == null || carbs < 0 || protein < 0 || fat < 0) {
+    if (carbs == null ||
+        protein == null ||
+        fat == null ||
+        carbs < 0 ||
+        protein < 0 ||
+        fat < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter valid Carbs, Protein, and Fat'),
@@ -206,15 +208,24 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircularProgressIndicator(color: AppColors.primaryGreen),
+                                CircularProgressIndicator(
+                                  color: AppColors.primaryGreen,
+                                ),
                                 SizedBox(height: 12),
-                                Text('Analyse IA en cours...', style: TextStyle(color: AppColors.textSecondary)),
+                                Text(
+                                  'Analyse IA en cours...',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
                               ],
                             ),
                           )
                         : Center(
                             child: Icon(
-                              _captured ? Icons.done_all_rounded : Icons.camera_alt_rounded,
+                              _captured
+                                  ? Icons.done_all_rounded
+                                  : Icons.camera_alt_rounded,
                               size: 64,
                               color: AppColors.textMuted,
                             ),
@@ -232,7 +243,9 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primaryGreen,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                           ),
                         ),
@@ -246,7 +259,9 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                               foregroundColor: AppColors.primaryGreen,
                               side: BorderSide(color: AppColors.primaryGreen),
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                           ),
                         ),
@@ -258,7 +273,10 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                     // Meal name (if AI detected)
                     if (_mealName.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: AppColors.primaryGreen.withOpacity(0.08),
@@ -266,12 +284,20 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.fastfood_rounded, color: AppColors.primaryGreen, size: 20),
+                            const Icon(
+                              Icons.fastfood_rounded,
+                              color: AppColors.primaryGreen,
+                              size: 20,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 _mealName,
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -280,7 +306,10 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                     // Error message
                     if (_error != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: AppColors.warningOrange.withOpacity(0.12),
@@ -288,26 +317,49 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.info_outline_rounded, color: AppColors.warningOrange, size: 18),
+                            const Icon(
+                              Icons.info_outline_rounded,
+                              color: AppColors.warningOrange,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(_error!, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     // Confidence
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: _confidenceColor().withOpacity(0.15),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.psychology_rounded, color: _confidenceColor(), size: 22),
+                          Icon(
+                            Icons.psychology_rounded,
+                            color: _confidenceColor(),
+                            size: 22,
+                          ),
                           const SizedBox(width: 10),
                           Text(
                             'AI confidence: $_confidence%',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _confidenceColor()),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _confidenceColor(),
+                            ),
                           ),
                         ],
                       ),
@@ -315,13 +367,25 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                     const SizedBox(height: 20),
                     const Text(
                       'Edit values if needed, then save.',
-                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    _EditableRow(label: 'Carbs (g)', controller: _carbsController),
-                    _EditableRow(label: 'Protein (g)', controller: _proteinController),
+                    _EditableRow(
+                      label: 'Carbs (g)',
+                      controller: _carbsController,
+                    ),
+                    _EditableRow(
+                      label: 'Protein (g)',
+                      controller: _proteinController,
+                    ),
                     _EditableRow(label: 'Fat (g)', controller: _fatController),
-                    _EditableRow(label: 'Calories (kcal)', controller: _caloriesController),
+                    _EditableRow(
+                      label: 'Calories (kcal)',
+                      controller: _caloriesController,
+                    ),
                     // AI advice
                     if (_aiAdvice != null && _aiAdvice!.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -334,9 +398,22 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.lightbulb_rounded, color: AppColors.primaryGreen, size: 18),
+                            const Icon(
+                              Icons.lightbulb_rounded,
+                              color: AppColors.primaryGreen,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(_aiAdvice!, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.4))),
+                            Expanded(
+                              child: Text(
+                                _aiAdvice!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -348,11 +425,19 @@ class _AIMealCaptureScreenState extends State<AIMealCaptureScreen> {
                       child: FilledButton.icon(
                         onPressed: _confirmAndSave,
                         icon: const Icon(Icons.check_rounded, size: 22),
-                        label: const Text('Confirm & Save', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        label: const Text(
+                          'Confirm & Save',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primaryGreen,
                           foregroundColor: AppColors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                       ),
                     ),
@@ -381,18 +466,31 @@ class _EditableRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
             child: TextField(
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 isDense: true,
                 filled: true,
                 fillColor: AppColors.cardBackground,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
               ),
             ),
           ),

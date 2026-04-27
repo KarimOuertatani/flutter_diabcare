@@ -13,6 +13,7 @@ import 'package:diab_care/features/patient/viewmodels/glucose_viewmodel.dart';
 import 'package:diab_care/features/patient/views/medical_profile_form_screen.dart';
 import 'package:diab_care/data/services/subscription_service.dart';
 import 'package:diab_care/features/ai/views/premium_subscription_screen.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
 
 class PatientProfileScreen extends StatelessWidget {
   const PatientProfileScreen({super.key});
@@ -713,7 +714,15 @@ class PatientProfileScreen extends StatelessWidget {
                                 icon: Icons.notifications_rounded,
                                 title: 'Notifications',
                                 color: const Color(0xFFFFB347),
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const NotificationsInboxScreen(),
+                                    ),
+                                  );
+                                },
                               ),
                               const Divider(
                                 height: 1,
@@ -758,12 +767,23 @@ class PatientProfileScreen extends StatelessWidget {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: () async {
-                            await context.read<AuthViewModel>().logout();
-                            Navigator.pushNamedAndRemoveUntil(
-                              context,
-                              '/',
-                              (route) => false,
-                            );
+                            try {
+                              await context.read<AuthViewModel>().logout();
+                              if (!context.mounted) return;
+                              Navigator.of(
+                                context,
+                                rootNavigator: true,
+                              ).pushNamedAndRemoveUntil('/', (route) => false);
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Erreur de deconnexion: $e'),
+                                  backgroundColor: const Color(0xFFFF6B6B),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
                           },
                           child: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 14),

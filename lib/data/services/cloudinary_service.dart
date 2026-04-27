@@ -24,7 +24,8 @@ class CloudinaryService {
     String? folder,
   }) async {
     try {
-      final timestamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
+      final timestamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000)
+          .toString();
 
       // Build params string for signature (alphabetical order)
       final paramsMap = <String, String>{
@@ -40,10 +41,6 @@ class CloudinaryService {
 
       debugPrint('☁️ [Cloudinary] Uploading ${imageBytes.length} bytes...');
 
-      // Detect content type from extension
-      final ext = fileName.toLowerCase().split('.').last;
-      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
-
       // Build multipart request
       final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl));
       request.fields['api_key'] = _apiKey;
@@ -51,17 +48,23 @@ class CloudinaryService {
       request.fields['signature'] = signature;
       if (folder != null) request.fields['folder'] = folder;
 
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        imageBytes,
-        filename: fileName,
-        // Content-type from http_parser needed? No, Cloudinary detects it.
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          imageBytes,
+          filename: fileName,
+          // Content-type from http_parser needed? No, Cloudinary detects it.
+        ),
+      );
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+      );
       final response = await http.Response.fromStream(streamedResponse);
 
-      debugPrint('☁️ [Cloudinary] Response ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
+      debugPrint(
+        '☁️ [Cloudinary] Response ${response.statusCode}: ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -69,8 +72,12 @@ class CloudinaryService {
         debugPrint('☁️ [Cloudinary] Upload success: $secureUrl');
         return secureUrl;
       } else {
-        debugPrint('❌ [Cloudinary] Upload failed (${response.statusCode}): ${response.body}');
-        throw Exception('Cloudinary upload failed (${response.statusCode}): ${response.body}');
+        debugPrint(
+          '❌ [Cloudinary] Upload failed (${response.statusCode}): ${response.body}',
+        );
+        throw Exception(
+          'Cloudinary upload failed (${response.statusCode}): ${response.body}',
+        );
       }
     } catch (e) {
       debugPrint('❌ [Cloudinary] Upload error: $e');

@@ -8,9 +8,9 @@ import 'package:diab_care/core/theme/theme_provider.dart';
 import 'package:diab_care/core/utils/profile_image_utils.dart';
 import 'package:diab_care/core/widgets/animations.dart';
 import 'package:diab_care/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
 import 'package:diab_care/data/services/doctor_service.dart';
 import 'package:diab_care/core/services/token_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   const DoctorProfileScreen({super.key});
@@ -29,6 +29,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   bool _isUploadingPhoto = false;
   bool _isBoostLoading = false;
   bool _isBoostVerifying = false;
+  bool _isLoggingOut = false;
   String? _activatingBoostType;
   Map<String, dynamic>? _doctorData;
   Map<String, dynamic>? _boostStatus;
@@ -184,36 +185,28 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
     try {
       setState(() => _activatingBoostType = boostType);
-      final result = await _doctorService.createDoctorBoostCheckoutSession(
-        boostType,
-      );
+      final result = await _doctorService.purchaseDoctorBoost(boostType);
       if (!mounted) return;
 
-      final checkoutUrl = result['checkoutUrl']?.toString() ?? '';
-      if (checkoutUrl.isEmpty) {
-        throw Exception('URL de paiement Stripe indisponible');
-      }
+      setState(() {
+        _boostStatus = result;
+      });
 
-      final launched = await launchUrl(
-        Uri.parse(checkoutUrl),
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!launched && mounted) {
-        throw Exception('Impossible d\'ouvrir Stripe Checkout');
-      }
-
-      if (!mounted) return;
-
-      final message =
-          'Paiement ouvert. Revenez puis cliquez sur "Vérifier mon paiement".';
+      final isActive = result['isActive'] == true;
+      final message = isActive
+          ? 'Boost activé ✅ Votre profil est maintenant suggéré.'
+          : 'Achat enregistré. Synchronisation de l\'activation en cours.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: AppColors.softGreen,
+          backgroundColor: isActive
+              ? AppColors.softGreen
+              : AppColors.accentBlue,
           behavior: SnackBarBehavior.floating,
         ),
       );
+
+      await _refreshBoostData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -248,9 +241,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           content: Text(
             isActive
                 ? 'Boost activé ✅ Votre profil est maintenant suggéré.'
-                : 'Paiement non confirmé pour le moment. Réessayez dans quelques secondes.',
+                : 'Achat détecté, mais activation non confirmée pour le moment.',
           ),
-          backgroundColor: isActive ? AppColors.softGreen : AppColors.accentBlue,
+          backgroundColor: isActive
+              ? AppColors.softGreen
+              : AppColors.accentBlue,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -359,37 +354,31 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     }
   }
 
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Déconnexion'),
-        content: const Text('Êtes-vous sûr de vouloir vous déconnecter ?'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await context.read<AuthViewModel>().logout();
-              if (!context.mounted) return;
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6B6B),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Déconnexion'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _handleLogout() async {
+    if (_isLoggingOut) return;
+
+    setState(() => _isLoggingOut = true);
+    try {
+      await context.read<AuthViewModel>().logout();
+      if (!mounted) return;
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).pushNamedAndRemoveUntil('/', (route) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur de deconnexion: $e'),
+          backgroundColor: const Color(0xFFFF6B6B),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoggingOut = false);
+      }
+    }
   }
 
   @override
@@ -833,7 +822,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                           'Notifications',
                           'Gérer vos alertes',
                           const Color(0xFFFFB347),
-                          () {},
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotificationsInboxScreen(),
+                              ),
+                            );
+                          },
                         ),
                         // Dark mode
                         Container(
@@ -919,21 +916,33 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
-                              onTap: _showLogoutDialog,
-                              child: const Padding(
+                              onTap: _isLoggingOut ? null : _handleLogout,
+                              child: Padding(
                                 padding: EdgeInsets.symmetric(vertical: 16),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(
-                                      Icons.logout_rounded,
-                                      color: Color(0xFFFF6B6B),
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
+                                    if (_isLoggingOut)
+                                      const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFFFF6B6B),
+                                        ),
+                                      )
+                                    else
+                                      const Icon(
+                                        Icons.logout_rounded,
+                                        color: Color(0xFFFF6B6B),
+                                        size: 20,
+                                      ),
+                                    const SizedBox(width: 8),
                                     Text(
-                                      'Se déconnecter',
-                                      style: TextStyle(
+                                      _isLoggingOut
+                                          ? 'Déconnexion...'
+                                          : 'Se déconnecter',
+                                      style: const TextStyle(
                                         color: Color(0xFFFF6B6B),
                                         fontSize: 15,
                                         fontWeight: FontWeight.w700,
@@ -1192,7 +1201,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Payer'),
+                            : const Text('Acheter'),
                       ),
                     ],
                   ),
@@ -1212,9 +1221,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   )
                 : const Icon(Icons.verified_rounded),
             label: Text(
-              _isBoostVerifying
-                  ? 'Vérification...'
-                  : 'J\'ai payé, vérifier mon paiement',
+              _isBoostVerifying ? 'Vérification...' : 'Synchroniser mes achats',
             ),
           ),
         ],

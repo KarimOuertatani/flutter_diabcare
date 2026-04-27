@@ -5,6 +5,21 @@ import 'package:http/http.dart' as http;
 import 'package:diab_care/core/constants/api_constants.dart';
 import 'package:diab_care/core/services/token_service.dart';
 
+class NotificationApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  final bool isTemporary;
+
+  NotificationApiException(
+    this.message, {
+    this.statusCode,
+    this.isTemporary = false,
+  });
+
+  @override
+  String toString() => message;
+}
+
 class NotificationService {
   String get baseUrl => ApiConstants.serverBaseUrl;
   static const Duration _timeout = Duration(seconds: 12);
@@ -13,21 +28,153 @@ class NotificationService {
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await _tokenService.getToken();
+    if (token == null || token.isEmpty) {
+      throw NotificationApiException(
+        'Utilisateur non authentifié',
+        statusCode: 401,
+      );
+    }
+
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $token',
     };
   }
 
-  Exception _handleError(dynamic error) {
+  NotificationApiException _handleError(dynamic error) {
+    if (error is NotificationApiException) {
+      return error;
+    }
+
     if (error is SocketException) {
-      return Exception('Serveur inaccessible. Vérifiez la connexion backend.');
+      return NotificationApiException(
+        'Serveur inaccessible. Vérifiez la connexion backend.',
+        isTemporary: true,
+      );
     }
+
     if (error is TimeoutException) {
-      return Exception('Délai dépassé. Le serveur ne répond pas.');
+      return NotificationApiException(
+        'Délai dépassé. Le serveur ne répond pas.',
+        isTemporary: true,
+      );
     }
-    return Exception('Erreur: $error');
+
+    return NotificationApiException('Erreur: $error');
+  }
+
+  NotificationApiException _responseError(http.Response response) {
+    String message = 'Erreur notification (${response.statusCode})';
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map<String, dynamic>) {
+        final backendMessage = body['message'];
+        if (backendMessage is List) {
+          message = backendMessage.join(', ');
+        } else if (backendMessage is String && backendMessage.isNotEmpty) {
+          message = backendMessage;
+        }
+      }
+    } catch (_) {}
+
+    final temporary = response.statusCode >= 500 || response.statusCode == 429;
+    return NotificationApiException(
+      message,
+      statusCode: response.statusCode,
+      isTemporary: temporary,
+    );
+  }
+
+  Future<void> registerDeviceToken({
+    required String fcmToken,
+    required String userType,
+    required String userId,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/notifications/register-token'),
+            headers: headers,
+            body: jsonEncode({
+              'fcmToken': fcmToken,
+              'userType': userType,
+              'userId': userId,
+            }),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw _responseError(response);
+      }
+    } catch (error) {
+      throw _handleError(error);
+    }
+  }
+
+  Future<void> removeDeviceToken({
+    required String fcmToken,
+    required String userType,
+    required String userId,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .delete(
+            Uri.parse('$baseUrl/api/notifications/remove-token'),
+            headers: headers,
+            body: jsonEncode({
+              'fcmToken': fcmToken,
+              'userType': userType,
+              'userId': userId,
+            }),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw _responseError(response);
+      }
+    } catch (error) {
+      throw _handleError(error);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMyNotifications({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = Uri.parse('$baseUrl/api/notifications/my-notifications').replace(
+        queryParameters: {
+          'page': '$page',
+          'limit': '$limit',
+        },
+      );
+
+      final response = await http.get(uri, headers: headers).timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return decoded.whereType<Map<String, dynamic>>().toList();
+        }
+
+        if (decoded is Map<String, dynamic>) {
+          final data = decoded['data'];
+          if (data is List) {
+            return data.whereType<Map<String, dynamic>>().toList();
+          }
+        }
+
+        return [];
+      }
+
+      throw _responseError(response);
+    } catch (error) {
+      throw _handleError(error);
+    }
   }
 
   Future<List<Map<String, dynamic>>> getNotifications({
@@ -35,29 +182,27 @@ class NotificationService {
     String? type,
     int? limit,
   }) async {
-    try {
-      final headers = await _getHeaders();
-      final queryParameters = <String, String>{
-        if (unreadOnly) 'unreadOnly': 'true',
-        if (type != null && type.isNotEmpty) 'type': type,
-        if (limit != null) 'limit': '$limit',
-      };
+    final all = await getMyNotifications(limit: limit ?? 50);
+    final filtered = all.where((item) {
+      final isUnread = item['isRead'] != true;
+      final matchesUnread = !unreadOnly || isUnread;
+      final matchesType =
+          type == null ||
+          type.isEmpty ||
+          (item['type']?.toString().toLowerCase() == type.toLowerCase());
+      return matchesUnread && matchesType;
+    }).toList();
 
-      final uri = Uri.parse('$baseUrl/api/notifications').replace(
-        queryParameters: queryParameters.isEmpty ? null : queryParameters,
-      );
+    filtered.sort((a, b) {
+      final left = DateTime.tryParse((a['createdAt'] ?? a['timestamp'] ?? '').toString());
+      final right = DateTime.tryParse((b['createdAt'] ?? b['timestamp'] ?? '').toString());
+      if (left == null && right == null) return 0;
+      if (left == null) return 1;
+      if (right == null) return -1;
+      return right.compareTo(left);
+    });
 
-      final response = await http.get(uri, headers: headers).timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.whereType<Map<String, dynamic>>().toList();
-      }
-
-      throw Exception('Impossible de charger les notifications');
-    } catch (error) {
-      throw _handleError(error);
-    }
+    return filtered;
   }
 
   Future<int> getUnreadCount() async {
@@ -75,7 +220,7 @@ class NotificationService {
         return (data['count'] ?? 0) as int;
       }
 
-      throw Exception('Impossible de récupérer le compteur');
+      throw _responseError(response);
     } catch (error) {
       throw _handleError(error);
     }
@@ -91,8 +236,8 @@ class NotificationService {
           )
           .timeout(_timeout);
 
-      if (response.statusCode != 200) {
-        throw Exception('Impossible de marquer la notification comme lue');
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw _responseError(response);
       }
     } catch (error) {
       throw _handleError(error);
@@ -109,8 +254,8 @@ class NotificationService {
           )
           .timeout(_timeout);
 
-      if (response.statusCode != 200) {
-        throw Exception('Impossible de marquer toutes les notifications comme lues');
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw _responseError(response);
       }
     } catch (error) {
       throw _handleError(error);

@@ -217,13 +217,30 @@ class AppointmentService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final queryParams = <String, String>{};
-      if (status != null) queryParams['status'] = status.name;
+      final queryParams = <String, String>{
+        'page': '1',
+        'limit': '100',
+      };
+      if (status != null) {
+        queryParams['status'] = status.name;
+      }
+
       final uri = Uri.parse('$baseUrl/api/appointments/patient/$patientId')
           .replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+
       final response = await http.get(uri, headers: headers).timeout(_timeout);
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
+        final responseData = jsonDecode(response.body);
+        List<dynamic> data;
+
+        if (responseData is List) {
+          data = responseData;
+        } else if (responseData is Map && responseData.containsKey('data')) {
+          data = responseData['data'] as List<dynamic>;
+        } else {
+          throw Exception('Unexpected response format');
+        }
+
         return data.map((json) => AppointmentModel.fromJson(json)).toList();
       } else {
         final error = jsonDecode(response.body);
@@ -329,6 +346,27 @@ class AppointmentService {
   // Helper method: Confirm appointment (shorthand for update)
   Future<AppointmentModel> confirmAppointment(String appointmentId) async {
     return updateAppointment(appointmentId, status: AppointmentStatus.CONFIRMED);
+  }
+
+  // Helper method: Patient confirms doctor-created appointment
+  Future<AppointmentModel> confirmByPatient(String appointmentId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/appointments/$appointmentId/patient-confirm'),
+        headers: headers,
+      ).timeout(_timeout);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return AppointmentModel.fromJson(data);
+      }
+
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to confirm appointment');
+    } catch (e) {
+      throw _handleError(e);
+    }
   }
 
   // Helper method: Cancel appointment (shorthand for update)

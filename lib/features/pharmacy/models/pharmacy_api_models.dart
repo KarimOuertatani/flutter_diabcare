@@ -130,6 +130,13 @@ class PharmacyLocation {
           [],
     );
   }
+
+  double? get longitude => coordinates.isNotEmpty ? coordinates[0] : null;
+  double? get latitude => coordinates.length > 1 ? coordinates[1] : null;
+
+  Map<String, dynamic> toJson() {
+    return {'type': type, 'coordinates': coordinates};
+  }
 }
 
 // ─── Dashboard Stats ───────────────────────────────────────
@@ -520,6 +527,7 @@ class PharmacyDashboardModel {
 class MedicationRequestModel {
   final String id;
   final String patientId;
+  final String patientName;
   final String medicationName;
   final String dosage;
   final int quantity;
@@ -535,6 +543,7 @@ class MedicationRequestModel {
   MedicationRequestModel({
     required this.id,
     required this.patientId,
+    required this.patientName,
     required this.medicationName,
     required this.dosage,
     required this.quantity,
@@ -549,9 +558,35 @@ class MedicationRequestModel {
   });
 
   factory MedicationRequestModel.fromJson(Map<String, dynamic> json) {
+    String patientId = '';
+    String patientName = '';
+    final patientField = json['patientId'];
+    if (patientField is Map<String, dynamic>) {
+      patientId = patientField['_id']?.toString() ?? '';
+      final prenom = patientField['prenom']?.toString() ?? '';
+      final nom = patientField['nom']?.toString() ?? '';
+      patientName = '$prenom $nom'.trim();
+      if (patientName.isEmpty) {
+        patientName =
+            patientField['fullName']?.toString() ??
+            patientField['name']?.toString() ??
+            '';
+      }
+    } else {
+      patientId = patientField?.toString() ?? '';
+    }
+
+    if (patientName.isEmpty) {
+      patientName =
+          json['patientName']?.toString() ??
+          json['patientFullName']?.toString() ??
+          '';
+    }
+
     return MedicationRequestModel(
       id: json['_id'] ?? '',
-      patientId: json['patientId'] ?? '',
+      patientId: patientId,
+      patientName: patientName,
       medicationName: json['medicationName'] ?? '',
       dosage: json['dosage'] ?? '',
       quantity: json['quantity'] ?? 0,

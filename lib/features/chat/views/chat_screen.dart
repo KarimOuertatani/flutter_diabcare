@@ -13,8 +13,16 @@ class ConversationListScreen extends StatefulWidget {
   /// If true, shows patient names (doctor side). Otherwise doctor names.
   final bool isDoctor;
   final bool isPharmacist;
+  final bool doctorOnly;
+  final bool pharmacistOnly;
 
-  const ConversationListScreen({super.key, this.isDoctor = false, this.isPharmacist = false});
+  const ConversationListScreen({
+    super.key,
+    this.isDoctor = false,
+    this.isPharmacist = false,
+    this.doctorOnly = false,
+    this.pharmacistOnly = false,
+  });
 
   @override
   State<ConversationListScreen> createState() => _ConversationListScreenState();
@@ -39,7 +47,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
       appBar: AppBar(
-        title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Messages',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -67,24 +78,40 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       );
     }
 
-    if (vm.conversations.isEmpty) {
+    final conversations = widget.doctorOnly
+        ? vm.conversations.where((c) => c.type != 'pharmacist').toList()
+        : widget.pharmacistOnly
+        ? vm.conversations.where((c) => c.type == 'pharmacist').toList()
+        : vm.conversations;
+
+    if (conversations.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.chat_bubble_outline_rounded, size: 64, color: Colors.grey.shade300),
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
             const SizedBox(height: 16),
             const Text(
               'Aucune conversation',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               widget.isDoctor
                   ? 'Les conversations avec vos patients apparaîtront ici'
                   : widget.isPharmacist
-                      ? 'Les conversations avec vos patients apparaîtront ici'
-                      : 'Commencez une conversation avec un médecin',
+                  ? 'Les conversations avec vos patients apparaîtront ici'
+                  : widget.pharmacistOnly
+                  ? 'Commencez une conversation avec une pharmacie'
+                  : 'Commencez une conversation avec un médecin',
               style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
               textAlign: TextAlign.center,
             ),
@@ -98,12 +125,13 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       color: AppColors.softGreen,
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
-        itemCount: vm.conversations.length,
+        itemCount: conversations.length,
         itemBuilder: (context, index) {
-          final conv = vm.conversations[index];
+          final conv = conversations[index];
           return _ConversationTile(
             conversation: conv,
             isDoctor: widget.isDoctor,
+            isPharmacist: widget.isPharmacist,
             onTap: () {
               Navigator.push(
                 context,
@@ -111,6 +139,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   builder: (_) => ChatDetailScreen(
                     conversation: conv,
                     isDoctor: widget.isDoctor,
+                    isPharmacist: widget.isPharmacist,
                   ),
                 ),
               ).then((_) {
@@ -132,21 +161,26 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 class _ConversationTile extends StatelessWidget {
   final ConversationModel conversation;
   final bool isDoctor;
+  final bool isPharmacist;
   final VoidCallback onTap;
 
   const _ConversationTile({
     required this.conversation,
     required this.isDoctor,
+    required this.isPharmacist,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     // Show the OTHER person's name — use role-aware helper
-    final role = isDoctor ? 'medecin' : (conversation.type == 'pharmacist' && conversation.pharmacistId.isNotEmpty ? 'patient' : 'patient');
     final displayName = isDoctor
         ? conversation.patientName
-        : (conversation.type == 'pharmacist' ? conversation.pharmacistName : conversation.doctorName);
+        : isPharmacist
+        ? conversation.patientName
+        : (conversation.type == 'pharmacist'
+              ? conversation.pharmacistName
+              : conversation.doctorName);
     final initial = displayName.isNotEmpty
         ? displayName.split(' ').last[0].toUpperCase()
         : '?';
@@ -158,9 +192,13 @@ class _ConversationTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: hasUnread ? AppColors.softGreen.withOpacity(0.05) : Colors.white,
+          color: hasUnread
+              ? AppColors.softGreen.withOpacity(0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: hasUnread ? Border.all(color: AppColors.softGreen.withOpacity(0.2)) : null,
+          border: hasUnread
+              ? Border.all(color: AppColors.softGreen.withOpacity(0.2))
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -180,8 +218,14 @@ class _ConversationTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: isDoctor
-                          ? [AppColors.lightBlue, AppColors.lightBlue.withOpacity(0.7)]
-                          : [AppColors.softGreen, AppColors.softGreen.withOpacity(0.7)],
+                          ? [
+                              AppColors.lightBlue,
+                              AppColors.lightBlue.withOpacity(0.7),
+                            ]
+                          : [
+                              AppColors.softGreen,
+                              AppColors.softGreen.withOpacity(0.7),
+                            ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -231,10 +275,12 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          displayName.isEmpty ? 'Utilisateur' : displayName,
+                          displayName.isEmpty ? 'Patient' : displayName,
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w500,
+                            fontWeight: hasUnread
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                             color: AppColors.textPrimary,
                           ),
                           maxLines: 1,
@@ -245,8 +291,12 @@ class _ConversationTile extends StatelessWidget {
                         _formatTime(conversation.lastMessageTime),
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
-                          color: hasUnread ? AppColors.softGreen : AppColors.textMuted,
+                          fontWeight: hasUnread
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: hasUnread
+                              ? AppColors.softGreen
+                              : AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -258,8 +308,12 @@ class _ConversationTile extends StatelessWidget {
                         : conversation.lastMessage,
                     style: TextStyle(
                       fontSize: 13,
-                      color: hasUnread ? AppColors.textPrimary : AppColors.textMuted,
-                      fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
+                      color: hasUnread
+                          ? AppColors.textPrimary
+                          : AppColors.textMuted,
+                      fontWeight: hasUnread
+                          ? FontWeight.w500
+                          : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -291,11 +345,13 @@ class _ConversationTile extends StatelessWidget {
 class ChatDetailScreen extends StatefulWidget {
   final ConversationModel conversation;
   final bool isDoctor;
+  final bool isPharmacist;
 
   const ChatDetailScreen({
     super.key,
     required this.conversation,
     this.isDoctor = false,
+    this.isPharmacist = false,
   });
 
   @override
@@ -367,9 +423,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final otherName = widget.isDoctor
         ? widget.conversation.patientName
+        : widget.isPharmacist
+        ? widget.conversation.patientName
         : widget.conversation.type == 'pharmacist'
-            ? widget.conversation.pharmacistName
-            : widget.conversation.doctorName;
+        ? widget.conversation.pharmacistName
+        : widget.conversation.doctorName;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
@@ -387,15 +445,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: widget.isDoctor
-                      ? [AppColors.lightBlue, AppColors.lightBlue.withOpacity(0.7)]
-                      : [AppColors.softGreen, AppColors.softGreen.withOpacity(0.7)],
+                      ? [
+                          AppColors.lightBlue,
+                          AppColors.lightBlue.withOpacity(0.7),
+                        ]
+                      : [
+                          AppColors.softGreen,
+                          AppColors.softGreen.withOpacity(0.7),
+                        ],
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
                 child: Text(
-                  otherName.isNotEmpty ? otherName.split(' ').last[0].toUpperCase() : '?',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                  otherName.isNotEmpty
+                      ? otherName.split(' ').last[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
@@ -405,15 +475,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    otherName.isEmpty ? 'Utilisateur' : otherName,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    otherName.isEmpty ? 'Patient' : otherName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const Row(
                     children: [
                       Icon(Icons.circle, size: 8, color: AppColors.statusGood),
                       SizedBox(width: 4),
-                      Text('En ligne', style: TextStyle(fontSize: 11, color: AppColors.statusGood)),
+                      Text(
+                        'En ligne',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.statusGood,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -449,11 +528,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.waving_hand_rounded, size: 48, color: Colors.amber.shade300),
+            Icon(
+              Icons.waving_hand_rounded,
+              size: 48,
+              color: Colors.amber.shade300,
+            ),
             const SizedBox(height: 12),
             const Text(
               'Commencez la conversation !',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 4),
             const Text(
@@ -525,7 +612,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   minLines: 1,
                   decoration: const InputDecoration(
                     hintText: 'Écrire un message...',
-                    hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    hintStyle: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 14,
+                    ),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -561,7 +651,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                    : const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
               ),
             ),
           ],
@@ -590,7 +684,15 @@ class _DateHeader extends StatelessWidget {
     } else if (diff.inDays == 1) {
       text = 'Hier';
     } else if (diff.inDays < 7) {
-      const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+      const days = [
+        'Lundi',
+        'Mardi',
+        'Mercredi',
+        'Jeudi',
+        'Vendredi',
+        'Samedi',
+        'Dimanche',
+      ];
       text = days[date.weekday - 1];
     } else {
       text = DateFormat('dd/MM/yyyy').format(date);
@@ -607,7 +709,11 @@ class _DateHeader extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textMuted,
+            ),
           ),
         ),
       ),
@@ -633,10 +739,14 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           Container(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: isMe ? AppColors.softGreen : Colors.white,
@@ -673,15 +783,21 @@ class _MessageBubble extends StatelessWidget {
                       DateFormat('HH:mm').format(message.timestamp),
                       style: TextStyle(
                         fontSize: 10,
-                        color: isMe ? Colors.white.withOpacity(0.7) : AppColors.textMuted,
+                        color: isMe
+                            ? Colors.white.withOpacity(0.7)
+                            : AppColors.textMuted,
                       ),
                     ),
                     if (isMe) ...[
                       const SizedBox(width: 4),
                       Icon(
-                        message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                        message.isRead
+                            ? Icons.done_all_rounded
+                            : Icons.done_rounded,
                         size: 14,
-                        color: message.isRead ? Colors.white : Colors.white.withOpacity(0.6),
+                        color: message.isRead
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.6),
                       ),
                     ],
                   ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:diab_care/core/services/token_service.dart';
+import 'package:diab_care/core/services/push_notification_service.dart';
+import 'package:diab_care/data/services/revenuecat_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:diab_care/core/constants/api_constants.dart';
 import 'package:diab_care/features/auth/services/auth_service.dart';
@@ -9,6 +11,7 @@ enum UserRole { patient, doctor, pharmacy }
 class AuthViewModel extends ChangeNotifier {
   final TokenService _tokenService = TokenService();
   final AuthService _authService = AuthService();
+  final RevenueCatService _revenueCatService = RevenueCatService();
 
   UserRole? _selectedRole;
   bool _isLoggedIn = false;
@@ -71,6 +74,9 @@ class AuthViewModel extends ChangeNotifier {
         // Auto-detect role from backend response
         _selectedRole = _parseRole(response.userData!['role']?.toString());
         _errorMessage = null;
+
+        _syncPushAfterLogin();
+        _syncRevenueCatAfterLogin();
 
         _isLoading = false;
         notifyListeners();
@@ -139,6 +145,9 @@ class AuthViewModel extends ChangeNotifier {
         _selectedRole = _parseRole(response.userData!['role']?.toString());
         _errorMessage = null;
 
+        _syncPushAfterLogin();
+        _syncRevenueCatAfterLogin();
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -157,6 +166,16 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    try {
+      await PushNotificationService.instance.onBeforeLogout();
+    } catch (e) {
+      debugPrint('Logout push cleanup failed: $e');
+    }
+    try {
+      await _revenueCatService.logOutIfNeeded();
+    } catch (e) {
+      debugPrint('RevenueCat logout cleanup failed: $e');
+    }
     await _tokenService.clearAuthData();
     _isLoggedIn = false;
     _selectedRole = null;
@@ -164,6 +183,21 @@ class AuthViewModel extends ChangeNotifier {
     _userId = null;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  void _syncPushAfterLogin() {
+    // Do not block login navigation on push token/network issues.
+    PushNotificationService.instance
+        .onAuthenticatedSession(force: true)
+        .catchError((error) {
+          debugPrint('Push sync after login failed: $error');
+        });
+  }
+
+  void _syncRevenueCatAfterLogin() {
+    _revenueCatService.configureIfNeeded().catchError((error) {
+      debugPrint('RevenueCat sync after login failed: $error');
+    });
   }
 
   /// Get current user's patient ID (for patient role)

@@ -1,12 +1,17 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/utils/profile_image_utils.dart';
 import 'package:diab_care/core/widgets/animations.dart';
 import 'package:diab_care/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
+import 'package:diab_care/features/pharmacy/views/pharmacy_location_picker_screen.dart';
 import 'package:diab_care/features/pharmacy/viewmodels/pharmacy_viewmodel.dart';
 
 class PharmacyProfileScreen extends StatefulWidget {
@@ -18,6 +23,7 @@ class PharmacyProfileScreen extends StatefulWidget {
 
 class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
   bool _isUploadingPhoto = false;
+  bool _isSavingLocation = false;
 
   @override
   void initState() {
@@ -29,6 +35,205 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
         viewModel.loadDashboard();
       }
     });
+  }
+
+  Future<void> _openLocationOptions(PharmacyViewModel viewModel) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Localisation pharmacie',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.my_location_rounded),
+                title: const Text('Detecter automatiquement'),
+                subtitle: const Text('Utiliser la position actuelle'),
+                onTap: () => Navigator.pop(ctx, 'auto'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.map_rounded),
+                title: const Text('Choisir sur la carte'),
+                subtitle: const Text('Placer manuellement le point'),
+                onTap: () => Navigator.pop(ctx, 'manual'),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (action == null) return;
+    if (action == 'auto') {
+      await _setAutoLocation(viewModel);
+    } else {
+      await _setManualLocation(viewModel);
+    }
+  }
+
+  Future<void> _setAutoLocation(PharmacyViewModel viewModel) async {
+    if (_isSavingLocation) return;
+
+    setState(() => _isSavingLocation = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        throw Exception('Service de localisation desactive');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Permission localisation refusee');
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(const Duration(seconds: 10));
+
+      String? address;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final pm = placemarks.first;
+          final parts = [
+            pm.street,
+            pm.locality,
+            pm.administrativeArea,
+            pm.country,
+          ].where((e) => e != null && e.trim().isNotEmpty).cast<String>().toList();
+          address = parts.join(', ');
+        }
+      } catch (_) {
+        // Keep coordinates even if reverse geocoding fails.
+      }
+
+      final ok = await viewModel.updatePharmacyLocation(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        adressePharmacie: address,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Localisation mise a jour avec succes.'
+                : 'Echec de mise a jour de la localisation.',
+          ),
+          backgroundColor: ok ? AppColors.softGreen : Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Localisation: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingLocation = false);
+      }
+    }
+  }
+
+  Future<void> _setManualLocation(PharmacyViewModel viewModel) async {
+    if (_isSavingLocation) return;
+
+    final currentLocation = viewModel.pharmacyProfile?.location;
+    final initial = (currentLocation?.latitude != null &&
+            currentLocation?.longitude != null)
+        ? LatLng(currentLocation!.latitude!, currentLocation.longitude!)
+        : null;
+
+    final picked = await Navigator.push<PharmacyLocationPickerResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PharmacyLocationPickerScreen(initialLocation: initial),
+      ),
+    );
+
+    if (picked == null) return;
+    setState(() => _isSavingLocation = true);
+
+    try {
+      String? address;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          picked.latitude,
+          picked.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final pm = placemarks.first;
+          final parts = [
+            pm.street,
+            pm.locality,
+            pm.administrativeArea,
+            pm.country,
+          ].where((e) => e != null && e.trim().isNotEmpty).cast<String>().toList();
+          address = parts.join(', ');
+        }
+      } catch (_) {}
+
+      final ok = await viewModel.updatePharmacyLocation(
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+        adressePharmacie: address,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Position enregistree avec succes.'
+                : 'Echec enregistrement de la position.',
+          ),
+          backgroundColor: ok ? AppColors.softGreen : Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingLocation = false);
+      }
+    }
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -354,6 +559,12 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
                       ),
                       const SizedBox(height: 24),
 
+                      FadeInSlide(
+                        index: 2,
+                        child: _buildLocationCard(context, viewModel),
+                      ),
+                      const SizedBox(height: 24),
+
                       // ── Settings list ──
                       FadeInSlide(
                         index: 3,
@@ -406,7 +617,15 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
                                     Icons.notifications_rounded,
                                     'Notifications',
                                     AppColors.softGreen,
-                                    () {},
+                                    () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const NotificationsInboxScreen(),
+                                        ),
+                                      );
+                                    },
                                   ),
                                   const Divider(
                                     height: 1,
@@ -455,6 +674,7 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
                               onTap: () async {
+                                final navigator = Navigator.of(context);
                                 final authVm = Provider.of<AuthViewModel>(
                                   context,
                                   listen: false,
@@ -464,15 +684,13 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
                                       context,
                                       listen: false,
                                     );
-                                await pharmacyVm.logout();
+                                await pharmacyVm.logout(clearAuthData: false);
                                 await authVm.logout();
-                                if (mounted) {
-                                  Navigator.pushNamedAndRemoveUntil(
-                                    context,
-                                    '/',
-                                    (route) => false,
-                                  );
-                                }
+                                if (!mounted) return;
+                                navigator.pushNamedAndRemoveUntil(
+                                  '/',
+                                  (route) => false,
+                                );
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -509,6 +727,93 @@ class _PharmacyProfileScreenState extends State<PharmacyProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLocationCard(BuildContext context, PharmacyViewModel viewModel) {
+    final profile = viewModel.pharmacyProfile;
+    final location = profile?.location;
+    final hasLocation = location?.latitude != null && location?.longitude != null;
+    final lat = location?.latitude;
+    final lng = location?.longitude;
+
+    return _buildInfoCard(
+      icon: Icons.location_searching_rounded,
+      title: 'Localisation de la pharmacie',
+      color: AppColors.lightBlue,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Cette position est utilisee pour recevoir les demandes des patients a proximite.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: hasLocation
+                    ? AppColors.softGreen.withOpacity(0.14)
+                    : Colors.orange.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                hasLocation ? 'Configuree' : 'Non configuree',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: hasLocation ? AppColors.softGreen : Colors.orange,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          hasLocation
+              ? 'Lat: ${lat!.toStringAsFixed(6)} • Lng: ${lng!.toStringAsFixed(6)}'
+              : 'Aucune coordonnee GPS enregistree.',
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isSavingLocation
+                ? null
+                : () => _openLocationOptions(viewModel),
+            icon: _isSavingLocation
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.edit_location_alt_rounded),
+            label: Text(
+              _isSavingLocation
+                  ? 'Mise a jour...'
+                  : 'Configurer ma localisation',
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.lightBlue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

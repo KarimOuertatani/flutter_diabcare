@@ -7,6 +7,8 @@ import 'package:diab_care/features/pharmacy/widgets/boost_management_widget.dart
 import 'package:diab_care/features/pharmacy/views/pharmacy_points_screen.dart';
 import 'package:diab_care/core/widgets/animations.dart';
 import 'package:diab_care/features/pharmacy/models/pharmacy_api_models.dart';
+import 'package:diab_care/data/services/notification_service.dart';
+import 'package:diab_care/features/notifications/views/notifications_inbox_screen.dart';
 
 class PharmacyDashboardScreen extends StatefulWidget {
   const PharmacyDashboardScreen({super.key});
@@ -37,19 +39,34 @@ class _DecorativeCircle extends StatelessWidget {
 
 class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
   final ScrollController _scrollController = ScrollController();
+  final _notificationService = NotificationService();
   bool _hasLoadedData = false;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadUnreadNotificationCount();
   }
 
   void _loadDataIfNeeded(PharmacyViewModel viewModel) {
-    if (!_hasLoadedData && viewModel.isLoggedIn) {
+    if (!_hasLoadedData) {
       _hasLoadedData = true;
       viewModel.loadDashboard();
       viewModel.loadAllRequests();
       viewModel.loadActiveBoosts();
+      _loadUnreadNotificationCount();
+    }
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final unread = await _notificationService.getUnreadCount();
+      if (!mounted) return;
+      setState(() => _unreadNotificationCount = unread);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _unreadNotificationCount = 0);
     }
   }
 
@@ -86,13 +103,24 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
         final profile = viewModel.pharmacyProfile;
         final stats = dashboardData?.stats;
 
-        // Calculer les stats depuis le dashboard (orders)
-        final pendingCount = dashboardData?.pendingRequestsCount ?? 0;
-        final acceptedCount = stats?.totalRequestsAccepted ?? 0;
-        final declinedCount = stats?.totalRequestsDeclined ?? 0;
-        final totalRequests =
-            stats?.totalRequestsReceived ??
-            (pendingCount + acceptedCount + declinedCount);
+        // Calculer les stats avec fallback sur les listes live des demandes.
+        // Ceci évite d'afficher 0 quand les champs agrégés backend arrivent en retard.
+        final pendingFromLists = viewModel.pendingRequests.length;
+        final acceptedFromLists = viewModel.acceptedRequests.length;
+        final declinedFromLists = viewModel.declinedRequests.length;
+
+        final pendingCount = (dashboardData?.pendingRequestsCount ?? 0) > 0
+          ? (dashboardData?.pendingRequestsCount ?? 0)
+          : pendingFromLists;
+        final acceptedCount = (stats?.totalRequestsAccepted ?? 0) > 0
+          ? (stats?.totalRequestsAccepted ?? 0)
+          : acceptedFromLists;
+        final declinedCount = (stats?.totalRequestsDeclined ?? 0) > 0
+          ? (stats?.totalRequestsDeclined ?? 0)
+          : declinedFromLists;
+        final totalRequests = (stats?.totalRequestsReceived ?? 0) > 0
+          ? (stats?.totalRequestsReceived ?? 0)
+          : (pendingCount + acceptedCount + declinedCount);
 
         // Points et autres infos
         final points = dashboardData?.pharmacy.points ?? profile?.points ?? 0;
@@ -124,6 +152,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
               await viewModel.loadDashboard();
               await viewModel.loadAllRequests();
               await viewModel.loadActiveBoosts();
+              await _loadUnreadNotificationCount();
             },
             color: AppColors.primaryGreen,
             child: CustomScrollView(
@@ -362,38 +391,56 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                             ),
                           ],
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.25),
+                        Row(
+                          children: [
+                            _GlassIconButton(
+                              icon: Icons.notifications_rounded,
+                              badge: _unreadNotificationCount,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const NotificationsInboxScreen(),
+                                  ),
+                                );
+                                await _loadUnreadNotificationCount();
+                              },
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                color: isOnline
-                                    ? AppColors.softGreen
-                                    : Colors.white70,
-                                size: 8,
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                isOnline ? 'En ligne' : 'Hors ligne',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.25),
                                 ),
                               ),
-                            ],
-                          ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.circle,
+                                    color: isOnline
+                                        ? AppColors.softGreen
+                                        : Colors.white70,
+                                    size: 8,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    isOnline ? 'En ligne' : 'Hors ligne',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1340,5 +1387,59 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
           'level': 1,
         };
     }
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  final IconData icon;
+  final int badge;
+  final VoidCallback onTap;
+
+  const _GlassIconButton({
+    required this.icon,
+    required this.badge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.25)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          if (badge > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B6B),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  badge > 99 ? '99+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

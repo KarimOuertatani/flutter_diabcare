@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
-import 'package:diab_care/core/constants/api_constants.dart';
 import 'package:diab_care/core/services/token_service.dart';
 import 'package:diab_care/data/services/appointment_service.dart';
+import 'package:diab_care/data/services/patient_service.dart';
 import 'package:diab_care/data/models/appointment_model.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
 
@@ -16,12 +15,15 @@ class AppointmentsScreen extends StatefulWidget {
 }
 
 class _AppointmentsScreenState extends State<AppointmentsScreen> {
+  static const int _maxAppointmentsPerDay = 15;
+
   DateTime selectedDate = DateTime.now();
   String selectedView = 'Liste'; // Changed default to List View
 
   // API Integration
   final _appointmentService = AppointmentService();
   final _tokenService = TokenService();
+  final _patientService = PatientService();
   List<AppointmentModel> _appointments = [];
   List<AppointmentModel> _filteredAppointments = [];
   AppointmentStats? _stats;
@@ -111,6 +113,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         );
       } else {
         appointments = await _appointmentService.getDoctorAppointments(_doctorId!);
+        appointments = appointments
+            .where((apt) => apt.status != AppointmentStatus.CANCELLED)
+            .toList();
       }
 
       print('✅ Loaded ${appointments.length} appointments');
@@ -253,7 +258,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,38 +282,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                               ),
                             ),
                           ],
-                        ),
-                        InkWell(
-                          onTap: () => _showAddAppointmentDialog(context),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFFB347), Color(0xFFFF9500)],
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFFB347).withOpacity(0.4),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.add, color: Colors.white, size: 20),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Nouveau',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ],
                     ),
@@ -952,7 +925,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   Widget _buildAppointmentCardFromModel(AppointmentModel appointment) {
     return _buildAppointmentCardWithActions(
       appointment: appointment,
-      patientName: appointment.patientName ?? 'Patient ${appointment.patientId.substring(0, 6)}',
+      patientName: appointment.patientName ?? 'Patient',
       time: appointment.formattedTime,
       type: appointment.type.displayName,
       status: appointment.status.displayName,
@@ -1123,9 +1096,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           case 'edit':
                             _showEditAppointmentDialog(appointment);
                             break;
-                          case 'confirm':
-                            await _confirmAppointment(appointment.id);
-                            break;
                           case 'cancel':
                             await _cancelAppointment(appointment.id);
                             break;
@@ -1155,17 +1125,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                         ],
                       ),
                     ),
-                    if (appointment.status == AppointmentStatus.PENDING)
-                      const PopupMenuItem(
-                        value: 'confirm',
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle, size: 18, color: AppColors.stable),
-                            SizedBox(width: 12),
-                            Text('Confirmer', style: TextStyle(color: AppColors.stable)),
-                          ],
-                        ),
-                      ),
                     if (appointment.status != AppointmentStatus.CANCELLED &&
                         appointment.status != AppointmentStatus.COMPLETED)
                       const PopupMenuItem(
@@ -1192,51 +1151,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 ), // Closing PopupMenuButton
               ], // Closing first Row's children
             ), // Closing first Row
-
-            // ACTION BUTTONS for PENDING appointments
-            if (status == 'Pending') ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  // Decline Button
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _declineAppointment(appointment.id),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF6B6B),
-                        side: const BorderSide(color: Color(0xFFFF6B6B)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(Icons.cancel_rounded, size: 18),
-                      label: const Text('Refuser', style: TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Accept Button
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _acceptAppointment(appointment.id),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7DDAB9),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(Icons.check_circle_rounded, size: 18),
-                      label: const Text('Accepter', style: TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ], // Closing Column's children
         ), // Closing Column
       ), // Closing Padding
@@ -1339,20 +1253,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
   Future<void> _editAppointment(AppointmentModel appointment) async {
     _showEditAppointmentDialog(appointment);
-  }
-
-  Future<void> _confirmAppointment(String appointmentId) async {
-    try {
-      await _appointmentService.confirmAppointment(appointmentId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rendez-vous confirmé'), backgroundColor: Colors.green),
-      );
-      _loadAppointments(); // Reload to show updated status
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : ${e.toString()}'), backgroundColor: Colors.red),
-      );
-    }
   }
 
   Future<void> _cancelAppointment(String appointmentId) async {
@@ -1748,7 +1648,11 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            _buildDetailRow('ID Patient', appointment.patientId),
+            _buildDetailRow('Patient', appointment.patientName ?? 'Inconnu'),
+            if ((appointment.patientEmail ?? '').isNotEmpty)
+              _buildDetailRow('Email', appointment.patientEmail!),
+            if ((appointment.patientPhone ?? '').isNotEmpty)
+              _buildDetailRow('Téléphone', appointment.patientPhone!),
             _buildDetailRow('Date et heure', appointment.formattedDateTime),
             _buildDetailRow('Type', appointment.type.displayName),
             _buildDetailRow('Statut', appointment.status.displayName),
@@ -1906,63 +1810,28 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           print('🔍 Searching for patients: $value');
 
                           try {
-                            // Search patients using the search by name or email API
-                            final token = await _tokenService.getToken();
-                            print('🔑 Token: ${token?.substring(0, 20)}...');
-
-                            final uri = Uri.parse('${ApiConstants.baseUrl}/patients/search/by-name-or-email?query=$value');
-                            print('📡 Request URL: $uri');
-
-                            final response = await http.get(
-                              uri,
-                              headers: {
-                                'Authorization': 'Bearer $token',
-                                'Content-Type': 'application/json',
-                              },
-                            ).timeout(const Duration(seconds: 5));
-
-                            print('📥 Response status: ${response.statusCode}');
-                            print('📥 Response body: ${response.body}');
-
-                            if (response.statusCode == 200) {
-                              final List<dynamic> patients = jsonDecode(response.body);
-
-                              print('✅ Found ${patients.length} patients');
-
-                              setModalState(() {
-                                searchResults = List<Map<String, dynamic>>.from(
-                                  patients.map((p) {
-                                    final nom = p['nom'] ?? '';
-                                    final prenom = p['prenom'] ?? '';
-                                    final name = '$prenom $nom'.trim();
-                                    final finalName = name.isEmpty ? 'Inconnu' : name;
-
-                                    print('  Patient: $finalName (${p['email']})');
-
-                                    return {
-                                      'id': p['_id'] ?? p['id'] ?? '',
-                                      'name': finalName,
-                                      'email': p['email'] ?? 'No email',
-                                    };
-                                  })
-                                );
-                                isSearching = false;
-                              });
-                            } else {
-                              print('❌ Error: ${response.statusCode} - ${response.body}');
-                              setModalState(() {
-                                searchResults = [];
-                                isSearching = false;
-                              });
-
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Erreur de recherche : ${response.statusCode}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                            if (_doctorId == null) {
+                              throw Exception('Doctor ID not found');
                             }
+
+                            final patients = await _patientService.searchPatients(
+                              doctorId: _doctorId!,
+                              query: value,
+                            );
+
+                            print('✅ Found ${patients.length} linked patients');
+
+                            setModalState(() {
+                              searchResults = List<Map<String, dynamic>>.from(
+                                patients.map((p) => {
+                                  'id': p.id,
+                                  'name': p.fullName.trim().isEmpty ? 'Inconnu' : p.fullName,
+                                  'email': p.email,
+                                  'phone': p.telephone,
+                                }),
+                              );
+                              isSearching = false;
+                            });
                           } catch (e) {
                             print('❌ Search error: $e');
                             setModalState(() {
@@ -2243,6 +2112,41 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                               return;
                             }
 
+                            final appointmentsOnSameDate = _countAppointmentsOnDate(
+                              selectedDateTime,
+                            );
+
+                            if (appointmentsOnSameDate >= _maxAppointmentsPerDay) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Maximum $_maxAppointmentsPerDay rendez-vous atteint pour cette date.',
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+
+                            final patientAppointmentsSameDate =
+                                _countPatientAppointmentsOnDate(
+                              selectedPatientId!,
+                              selectedDateTime,
+                            );
+
+                            if (appointmentsOnSameDate > 0 ||
+                                patientAppointmentsSameDate > 0) {
+                              final proceed = await _showSameDateWarningDialog(
+                                selectedDateTime,
+                                appointmentsOnSameDate,
+                                patientAppointmentsSameDate,
+                              );
+
+                              if (proceed != true) {
+                                return;
+                              }
+                            }
+
                             setModalState(() => isCreating = true);
 
                             try {
@@ -2330,6 +2234,63 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  int _countAppointmentsOnDate(DateTime date) {
+    return _appointments
+        .where(
+          (apt) =>
+              _isSameDay(apt.dateTime, date) &&
+              apt.status != AppointmentStatus.CANCELLED,
+        )
+        .length;
+  }
+
+  int _countPatientAppointmentsOnDate(String patientId, DateTime date) {
+    return _appointments
+        .where(
+          (apt) =>
+              apt.patientId == patientId &&
+              _isSameDay(apt.dateTime, date) &&
+              apt.status != AppointmentStatus.CANCELLED,
+        )
+        .length;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Future<bool?> _showSameDateWarningDialog(
+    DateTime date,
+    int dayTotal,
+    int patientTotal,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Attention planning'),
+        content: Text(
+          'Le ${date.day}/${date.month}/${date.year}, vous avez déjà $dayTotal rendez-vous.\n'
+          '${patientTotal > 0 ? 'Ce patient a déjà $patientTotal rendez-vous ce jour-là.\n' : ''}'
+          'Voulez-vous continuer ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Non'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Oui, continuer'),
+          ),
+        ],
       ),
     );
   }
