@@ -1,8 +1,11 @@
 class ApiConstants {
   // Source unique d'URL backend.
   // Emulateur Android Studio (run typique): 10.0.2.2 pointe vers localhost du PC.
-  // Telephone reel (sans Render): utilisez --dart-define=API_BASE_URL=http://<IP_PC_WIFI>:3000
-  static const String _defaultServerBaseUrl = 'https://nestjs-mu65.onrender.com/';
+    // Telephone reel/local: utilisez --dart-define=API_BASE_URL=http://<IP_PC_WIFI>:3000
+        // Ancien backend Render (rollback rapide): https://nestjs-mu65.onrender.com/
+        // Ancien backend ngrok (rollback rapide): https://pectin-skinless-duty.ngrok-free.dev/
+    static const String _defaultServerBaseUrl =
+            'https://glucose-blend-voice.ngrok-free.dev/';
   static const String _serverBaseUrlFromEnv = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: _defaultServerBaseUrl,

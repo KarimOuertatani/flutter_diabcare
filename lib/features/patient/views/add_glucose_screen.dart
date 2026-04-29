@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
+import 'package:diab_care/core/services/ble_service.dart';
 import 'package:diab_care/features/patient/viewmodels/glucose_viewmodel.dart';
 
 class AddGlucoseScreen extends StatefulWidget {
@@ -20,6 +24,8 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
   bool _isConnected = false;
   double? _glucometerValue;
   final _noteController = TextEditingController();
+  StreamSubscription<double>? _bleGlucoseSub;
+  StreamSubscription<ConnectionStateUpdate>? _bleConnSub;
 
   final _types = [
     {'key': 'fasting', 'label': 'À jeun', 'icon': Icons.wb_sunny_outlined},
@@ -38,6 +44,37 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
       final vm = context.read<GlucoseViewModel>();
       setState(() => _selectedUnit = vm.preferredUnit);
     });
+
+    _syncBleState();
+    _tabController.addListener(() {
+      if (_tabController.index == 1) {
+        _syncBleState();
+      }
+    });
+    
+    // BLE listeners
+    _bleGlucoseSub = BleService.instance.glucoseStream.listen((value) {
+      setState(() {
+        _glucometerValue = value;
+        _isConnected = true;
+        _isConnecting = false;
+      });
+    });
+
+    _bleConnSub = BleService.instance.connectionStream.listen((update) {
+      setState(() {
+        _isConnected = update.connectionState == DeviceConnectionState.connected;
+        if (_isConnected) _isConnecting = false;
+      });
+    });
+  }
+
+  void _syncBleState() {
+    final connected = BleService.instance.isConnected || BleService.instance.isNotifying;
+    setState(() {
+      _isConnected = connected;
+      if (connected) _isConnecting = false;
+    });
   }
 
   @override
@@ -45,6 +82,8 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
     _tabController.dispose();
     _valueController.dispose();
     _noteController.dispose();
+    _bleGlucoseSub?.cancel();
+    _bleConnSub?.cancel();
     super.dispose();
   }
 
@@ -104,13 +143,48 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
     }
   }
 
-  Future<void> _simulateGlucometerConnection() async {
+  Future<void> _connectToBleGlucometer() async {
+    if (BleService.instance.isConnected || BleService.instance.isNotifying) {
+      _syncBleState();
+      return;
+    }
+    // Request permissions
+    final permissions = <Permission>[
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.locationWhenInUse,
+    ];
+
+    final statuses = await permissions.request();
+    final allGranted = statuses.values.every((s) => s.isGranted);
+    if (!allGranted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissions Bluetooth requises')),
+      );
+      return;
+    }
+
     setState(() => _isConnecting = true);
-    await Future.delayed(const Duration(seconds: 2));
+    BleService.instance.startScanAndConnect();
+    Future.delayed(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      if (_isConnecting && !BleService.instance.isConnected) {
+        setState(() => _isConnecting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connexion échouée, réessayez.')),
+        );
+      }
+    });
+  }
+
+  Future<void> _disconnectBleGlucometer() async {
+    await BleService.instance.disconnect();
+    if (!mounted) return;
     setState(() {
+      _isConnected = false;
       _isConnecting = false;
-      _isConnected = true;
-      _glucometerValue = 95 + (DateTime.now().millisecond % 60).toDouble();
+      _glucometerValue = null;
     });
   }
 
@@ -304,7 +378,7 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
           const SizedBox(height: 30),
           // Bluetooth visual
           Container(
-            padding: const EdgeInsets.all(40),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -349,10 +423,28 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
                   style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 14),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _isConnected ? AppColors.softGreen.withOpacity(0.12) : AppColors.lightBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Text(
+                      _isConnected ? 'Connecté' : _isConnecting ? 'Connexion...' : 'Déconnecté',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _isConnected ? AppColors.softGreen : AppColors.lightBlue,
+                      ),
+                    ),
+                  ),
+                ),
                 if (_isConnected && _glucometerValue != null) ...[
                   const SizedBox(height: 24),
                   Text(
-                    '${_glucometerValue!.toInt()} $_selectedUnit',
+                    '${_glucometerValue!.toStringAsFixed(1)} $_selectedUnit',
                     style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: AppColors.softGreen),
                   ),
                 ],
@@ -360,25 +452,45 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> with SingleTickerPr
             ),
           ),
           const SizedBox(height: 20),
-
-          if (!_isConnected)
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _isConnecting ? null : _simulateGlucometerConnection,
-                icon: const Icon(Icons.bluetooth),
-                label: Text(_isConnecting ? 'Connexion...' : 'Connecter', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.lightBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _isConnecting || _isConnected ? null : _connectToBleGlucometer,
+                    icon: const Icon(Icons.bluetooth),
+                    label: Text(
+                      _isConnecting ? 'Connexion...' : 'Connecter',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.lightBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
                 ),
               ),
-            ),
-
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _isConnected ? _disconnectBleGlucometer : null,
+                    icon: const Icon(Icons.link_off_rounded),
+                    label: const Text('Déconnecter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           if (_isConnected) ...[
-            // Type Selection
             const SizedBox(height: 8),
             const Align(alignment: Alignment.centerLeft, child: Text('Type de mesure', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
             const SizedBox(height: 12),

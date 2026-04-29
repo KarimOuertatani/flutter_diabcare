@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/services/token_service.dart';
+import 'package:diab_care/core/services/walkthrough_service.dart';
 import 'package:diab_care/features/auth/services/auth_service.dart';
 import 'package:diab_care/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:diab_care/features/auth/views/widgets/auth_form_styles.dart';
 
 class RegisterMedecinScreen extends StatefulWidget {
   const RegisterMedecinScreen({super.key});
@@ -79,6 +81,9 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
         if (mounted) {
           context.read<AuthViewModel>().selectRole(UserRole.doctor);
           await context.read<AuthViewModel>().init();
+          await WalkthroughService.instance.markPendingAfterRegistration(
+            AppUserRole.doctor,
+          );
         }
       }
 
@@ -89,11 +94,17 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.pushNamedAndRemoveUntil(context, '/doctor-home', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/doctor-home',
+        (route) => false,
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(response.errorMessage ?? 'Erreur lors de l\'inscription'),
+          content: Text(
+            response.errorMessage ?? 'Erreur lors de l\'inscription',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -109,31 +120,11 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
           child: Column(
             children: [
               // App bar
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Text(
-                      'Inscription Médecin',
-                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
+              AuthFormStyles.header(context, 'Inscription Médecin'),
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
-                    ),
-                  ),
+                  decoration: AuthFormStyles.sheetDecoration,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Form(
@@ -147,7 +138,8 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             controller: _nameController,
                             label: 'Nom complet',
                             icon: Icons.person,
-                            validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
+                            validator: (v) =>
+                                v?.isEmpty ?? true ? 'Requis' : null,
                           ),
                           const SizedBox(height: 16),
                           // Email
@@ -169,7 +161,8 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             label: 'Téléphone',
                             icon: Icons.phone,
                             keyboardType: TextInputType.phone,
-                            validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
+                            validator: (v) =>
+                                v?.isEmpty ?? true ? 'Requis' : null,
                           ),
                           const SizedBox(height: 16),
                           // Password
@@ -179,8 +172,14 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             icon: Icons.lock,
                             obscureText: _obscurePassword,
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
                             ),
                             validator: (v) {
                               if (v?.isEmpty ?? true) return 'Requis';
@@ -194,7 +193,8 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             controller: _specialtyController,
                             label: 'Spécialité',
                             icon: Icons.medical_services,
-                            validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
+                            validator: (v) =>
+                                v?.isEmpty ?? true ? 'Requis' : null,
                           ),
                           const SizedBox(height: 16),
                           // License
@@ -202,7 +202,8 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             controller: _licenseController,
                             label: 'Numéro de licence',
                             icon: Icons.card_membership,
-                            validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
+                            validator: (v) =>
+                                v?.isEmpty ?? true ? 'Requis' : null,
                           ),
                           const SizedBox(height: 16),
                           // Hospital
@@ -210,7 +211,8 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             controller: _hospitalController,
                             label: 'Hôpital',
                             icon: Icons.local_hospital,
-                            validator: (v) => v?.isEmpty ?? true ? 'Requis' : null,
+                            validator: (v) =>
+                                v?.isEmpty ?? true ? 'Requis' : null,
                           ),
                           const SizedBox(height: 32),
                           // Register Button
@@ -219,13 +221,18 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
                             height: 52,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleRegister,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.lightBlue,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
+                              style: AuthFormStyles.primaryButtonStyle,
                               child: _isLoading
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('S\'inscrire', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                    )
+                                  : const Text(
+                                      'S\'inscrire',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -255,21 +262,11 @@ class _RegisterMedecinScreenState extends State<RegisterMedecinScreen> {
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.lightBlue),
+      decoration: AuthFormStyles.inputDecoration(
+        label: label,
+        icon: icon,
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.lightBlue, width: 2),
-        ),
       ),
     );
   }
 }
-

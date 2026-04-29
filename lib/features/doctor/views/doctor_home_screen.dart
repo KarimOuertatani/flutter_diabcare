@@ -39,7 +39,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   Future<void> _showWalkthroughIfNeeded() async {
     if (!mounted) return;
 
-    final shouldShow = await _walkthroughService.shouldShow(AppUserRole.doctor);
+    final shouldShow = await _walkthroughService
+        .consumePendingAfterRegistration(AppUserRole.doctor);
     if (!shouldShow || !mounted) return;
 
     final steps = _walkthroughService.stepsForRole(AppUserRole.doctor);
@@ -50,9 +51,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       builder: (_) => RoleWalkthroughDialog(
         roleTitle: _walkthroughService.roleTitle(AppUserRole.doctor),
         steps: steps,
-        onCompleted: () {
-          _walkthroughService.markSeen(AppUserRole.doctor);
-        },
+        onCompleted: () {},
       ),
     );
   }

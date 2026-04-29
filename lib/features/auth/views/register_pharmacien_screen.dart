@@ -6,9 +6,11 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:diab_care/core/theme/app_colors.dart';
 import 'package:diab_care/core/services/token_service.dart';
+import 'package:diab_care/core/services/walkthrough_service.dart';
 import 'package:diab_care/features/auth/services/auth_service.dart';
 import 'package:diab_care/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:diab_care/features/pharmacy/views/pharmacy_location_picker_screen.dart';
+import 'package:diab_care/features/auth/views/widgets/auth_form_styles.dart';
 
 class RegisterPharmacienScreen extends StatefulWidget {
   const RegisterPharmacienScreen({super.key});
@@ -114,6 +116,9 @@ class _RegisterPharmacienScreenState extends State<RegisterPharmacienScreen> {
         if (mounted) {
           context.read<AuthViewModel>().selectRole(UserRole.pharmacy);
           await context.read<AuthViewModel>().init();
+          await WalkthroughService.instance.markPendingAfterRegistration(
+            AppUserRole.pharmacy,
+          );
         }
       }
 
@@ -226,38 +231,11 @@ class _RegisterPharmacienScreenState extends State<RegisterPharmacienScreen> {
           child: Column(
             children: [
               // App bar
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Text(
-                      'Inscription Pharmacien',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              AuthFormStyles.header(context, 'Inscription Pharmacien'),
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
-                    ),
-                  ),
+                  decoration: AuthFormStyles.sheetDecoration,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Form(
@@ -379,14 +357,22 @@ class _RegisterPharmacienScreenState extends State<RegisterPharmacienScreen> {
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
-                                    onPressed: _isLocating ? null : _choosePharmacyLocation,
+                                    onPressed: _isLocating
+                                        ? null
+                                        : _choosePharmacyLocation,
                                     icon: const Icon(Icons.map_rounded),
                                     label: const Text('Choisir sur la carte'),
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.warmPeach,
-                                      side: const BorderSide(color: AppColors.warmPeach),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      foregroundColor: AppColors.softGreen,
+                                      side: const BorderSide(
+                                        color: AppColors.softGreen,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -410,12 +396,7 @@ class _RegisterPharmacienScreenState extends State<RegisterPharmacienScreen> {
                             height: 52,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleRegister,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.warmPeach,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
+                              style: AuthFormStyles.primaryButtonStyle,
                               child: _isLoading
                                   ? const CircularProgressIndicator(
                                       color: Colors.white,
@@ -456,19 +437,10 @@ class _RegisterPharmacienScreenState extends State<RegisterPharmacienScreen> {
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.warmPeach),
+      decoration: AuthFormStyles.inputDecoration(
+        label: label,
+        icon: icon,
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.warmPeach, width: 2),
-        ),
       ),
     );
   }

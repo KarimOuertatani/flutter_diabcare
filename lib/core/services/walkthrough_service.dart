@@ -19,27 +19,31 @@ class WalkthroughService {
   WalkthroughService._();
 
   static final WalkthroughService instance = WalkthroughService._();
-  static const String _seenKeyPrefix = 'walkthrough_seen';
+  static const String _pendingKeyPrefix = 'walkthrough_pending';
 
-  Future<bool> shouldShow(AppUserRole role) async {
+  Future<void> markPendingAfterRegistration(AppUserRole role) async {
     final prefs = await SharedPreferences.getInstance();
-    final key = await _keyForRole(role);
-    return !(prefs.getBool(key) ?? false);
-  }
-
-  Future<void> markSeen(AppUserRole role) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _keyForRole(role);
+    final key = await _pendingKeyForRole(role);
     await prefs.setBool(key, true);
   }
 
-  Future<String> _keyForRole(AppUserRole role) async {
+  Future<bool> consumePendingAfterRegistration(AppUserRole role) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _pendingKeyForRole(role);
+    final isPending = prefs.getBool(key) ?? false;
+    if (!isPending) return false;
+
+    await prefs.setBool(key, false);
+    return true;
+  }
+
+  Future<String> _pendingKeyForRole(AppUserRole role) async {
     final tokenService = TokenService();
     final userId = tokenService.userId ?? await tokenService.getUserId();
     final suffix = userId != null && userId.isNotEmpty
         ? '${role.name}_$userId'
         : role.name;
-    return '$_seenKeyPrefix.$suffix';
+    return '$_pendingKeyPrefix.$suffix';
   }
 
   String roleTitle(AppUserRole role) {

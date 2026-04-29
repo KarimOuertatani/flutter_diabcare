@@ -32,9 +32,8 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
   Future<void> _showWalkthroughIfNeeded() async {
     if (!mounted) return;
 
-    final shouldShow = await _walkthroughService.shouldShow(
-      AppUserRole.pharmacy,
-    );
+    final shouldShow = await _walkthroughService
+        .consumePendingAfterRegistration(AppUserRole.pharmacy);
     if (!shouldShow || !mounted) return;
 
     final steps = _walkthroughService.stepsForRole(AppUserRole.pharmacy);
@@ -45,9 +44,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
       builder: (_) => RoleWalkthroughDialog(
         roleTitle: _walkthroughService.roleTitle(AppUserRole.pharmacy),
         steps: steps,
-        onCompleted: () {
-          _walkthroughService.markSeen(AppUserRole.pharmacy);
-        },
+        onCompleted: () {},
       ),
     );
   }

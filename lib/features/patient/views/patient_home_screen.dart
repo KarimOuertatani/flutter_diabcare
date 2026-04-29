@@ -50,6 +50,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _initializeHome() async {
     context.read<GlucoseViewModel>().loadReadings();
     context.read<PatientViewModel>().loadPatientData();
@@ -63,9 +68,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   Future<void> _showWalkthroughIfNeeded() async {
     if (!mounted) return;
 
-    final shouldShow = await _walkthroughService.shouldShow(
-      AppUserRole.patient,
-    );
+    final shouldShow = await _walkthroughService
+        .consumePendingAfterRegistration(AppUserRole.patient);
     if (!shouldShow || !mounted) return;
 
     final steps = _walkthroughService.stepsForRole(AppUserRole.patient);
@@ -76,9 +80,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       builder: (_) => RoleWalkthroughDialog(
         roleTitle: _walkthroughService.roleTitle(AppUserRole.patient),
         steps: steps,
-        onCompleted: () {
-          _walkthroughService.markSeen(AppUserRole.patient);
-        },
+        onCompleted: () {},
       ),
     );
   }
